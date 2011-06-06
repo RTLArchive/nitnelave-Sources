@@ -1,0 +1,10 @@
+name: FreeSlot
+main: com.nitnelave.FreeSlot.FreeSlot
+version: 0.1
+author: nitnelave
+description: Gets the number of free slots in a player's inventory -- console only
+commands:
+    getfreeslot:
+        description: Gets the number of free slots in a player's inventory -- console only
+        usage: <command> playername (itemid or itemname) (durability)
+        aliases: gfs

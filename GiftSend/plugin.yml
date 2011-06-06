@@ -1,0 +1,9 @@
+name: GiftSend
+main: com.GiftSend.GiftSend.GiftSend
+version: 0.2.1
+author: nitnelave
+commands:
+    send:
+        description: Send items to other players
+        usage: /<command> [playername] [amount] [item_id or name] (damage/durability)
+        aliases: gift
