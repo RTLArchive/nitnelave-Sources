@@ -112,7 +112,7 @@ public class DispenserReFill extends JavaPlugin {
 				return true;
 			}
 			if(canUseCommand) {
-				if(command.equalsIgnoreCase("fill")) {
+				if(command.equalsIgnoreCase("dfill")) {
 					if(args.length > 0) {
 
 						Block block = player.getTargetBlock(null, 100);
@@ -157,7 +157,7 @@ public class DispenserReFill extends JavaPlugin {
 					}
 					return false;
 				}
-				else if(command.equalsIgnoreCase("refill")) {
+				else if(command.equalsIgnoreCase("drefill")) {
 
 					Block block = player.getTargetBlock(null, 100);
 					if(block.getTypeId() == 23 || block.getTypeId() == 54) {

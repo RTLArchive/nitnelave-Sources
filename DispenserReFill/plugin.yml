@@ -4,9 +4,9 @@ version: 0.1
 author: nitnelave
 description: Fills and refills dispensers with a command.
 commands:
-    fill:
+    dfill:
         description: Fills the dispenser you're facing with the item specified
         usage: <command> [itemid or name]
-    refill:
+    drefill:
         description: Refills the dispenser you're facing with the first item found.
         usage: <command>
