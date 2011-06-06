@@ -4,6 +4,7 @@ import org.bukkit.block.Block;
 import org.bukkit.block.BlockState;
 import org.bukkit.block.Chest;
 import org.bukkit.block.ContainerBlock;
+import org.bukkit.block.Dispenser;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
@@ -233,7 +234,10 @@ public class DispenserReFill extends JavaPlugin {
 		fill_inventory(container, fillid, durability, player, block.getWorld(), block.getLocation());
 		
 		if(container instanceof Chest){
-			ContainerBlock chest = (ContainerBlock) (scanForNeighborChest(block).getState());
+			Block tmp = scanForNeighborChest(block);
+			ContainerBlock chest = null;
+			if(tmp!=null)
+				chest = (ContainerBlock) (tmp.getState());
 			if(chest != null){
 				fill_inventory(chest, fillid, durability, player, block.getWorld(), block.getLocation());
 
@@ -253,10 +257,38 @@ public class DispenserReFill extends JavaPlugin {
 			}
 		}
 		else {
+			ContainerBlock[] chests = new ContainerBlock[12];
+			if(container instanceof Dispenser)
+				chests = scanNeighborsExtended(world, location);
 			Inventory play_inventory = player.getInventory();
 			Inventory container_inv = container.getInventory();
 			int play_amount_init = 0;
 			int disp_amount_init = 0;
+			int chest_amount_init = 0;
+			//Chests to storage
+			for(ContainerBlock chest : chests) {
+
+				if(chest != null) {				
+					int k = 0;
+					for(ItemStack itemstack : chest.getInventory().getContents()){
+						k++;
+
+						if(itemstack != null) {
+							//log.info(Integer.toString(k));
+							if(itemstack.getTypeId() == fillid && itemstack.getDurability() == durability) {
+								//log.info("ouais!");
+								chest_amount_init += itemstack.getAmount();
+								chest.getInventory().remove(itemstack);
+							}
+						}
+					}
+				}
+				else 
+					break;
+				
+				
+			}
+			//Player to storage
 			for(ItemStack itemstack : play_inventory.getContents()) {
 				if(itemstack != null) {
 					if(itemstack.getTypeId() == fillid && itemstack.getDurability() == durability) {
@@ -265,18 +297,131 @@ public class DispenserReFill extends JavaPlugin {
 					}
 				}
 			}
+			//Dispenser to storage or chest or drop
 			for(ItemStack itemstack : container_inv.getContents()) {
 				if(itemstack != null) {
 					if(itemstack.getTypeId() == fillid && itemstack.getDurability() == durability) {
 						disp_amount_init += itemstack.getAmount();
 					}
 					else {
-						world.dropItemNaturally(location, itemstack);
+						boolean added = false;
+						for(ContainerBlock chest : chests) {
+							if(chest != null) {
+								if (chest.getInventory().firstEmpty() > -1) {
+									chest.getInventory().addItem(itemstack);
+									added = true;
+									break;
+								}
+							}
+							else
+								break;
+							
+						}
+						if(!added)
+							world.dropItemNaturally(location, itemstack);
 					}
+					container_inv.removeItem(itemstack);
 				}
 			}
-			container_inv.clear();
-			int total_amount = play_amount_init + disp_amount_init;
+			container.getInventory().clear();
+			((BlockState) container).update();
+			container_inv = container.getInventory();
+			
+			int total_amount = play_amount_init + disp_amount_init + chest_amount_init;
+			
+			ReturnVariables var = stuff_inventory(container_inv, fillid, durability, total_amount);
+			int amount_left = var.getAmount();
+			disp_inventory = var.getInventory();
+			((BlockState) container).update();
+
+			
+			var = stuff_inventory(play_inventory, fillid, durability, Math.min(amount_left, play_amount_init));
+			amount_left = amount_left - Math.min(amount_left, play_amount_init) + var.getAmount();
+			play_inventory = var.getInventory();
+
+			for(ContainerBlock chest : chests) {
+				if(chest != null && amount_left > 0) {
+					Inventory inv = chest.getInventory();
+					var = stuff_inventory(inv, fillid, durability, amount_left);
+					amount_left = var.getAmount();
+					inv = var.getInventory();
+					((BlockState) chest).update();
+				}
+				else
+					break;
+			}
+			/*
+			//Dispenser in storage to dispenser
+			ReturnVariables var = stuff_inventory(container_inv, fillid, durability, disp_amount_init);
+			container_inv = var.getInventory();
+			int amount_left = var.getAmount();
+			//Excedent in chest
+			for(ContainerBlock chest : chests) {
+				if(chest != null) {
+
+					if (amount_left < 0)
+						break;
+					Inventory chest_inv = chest.getInventory();
+					var = stuff_inventory(chest_inv, fillid, durability, amount_left);
+					chest_inv = var.getInventory();
+					amount_left = var.getAmount();
+					((BlockState) chest).update();
+				}
+				else
+					break;
+				
+			}
+			//Excedent dropped
+			while(amount_left > 0){
+				int stack_size = Math.min(Material.getMaterial(fillid).getMaxStackSize(), amount_left);
+				world.dropItemNaturally(location, new ItemStack(fillid, stack_size, durability));
+				amount_left -= stack_size;
+			}
+			
+			
+			//Chest in storage to Dispenser
+			var = stuff_inventory(container_inv, fillid, durability, chest_amount_init);
+			container_inv = var.getInventory();
+			amount_left = var.getAmount();
+			
+			//Excedent in Chests
+
+			for(ContainerBlock chest : chests) {
+				if (amount_left < 0)
+					break;
+				Inventory chest_inv = chest.getInventory();
+				var = stuff_inventory(chest_inv, fillid, durability, amount_left);
+				chest_inv = var.getInventory();
+				amount_left = var.getAmount();
+				((BlockState) chest).update();
+				
+			}
+			//Excedent dropped
+			while(amount_left > 0){
+				int stack_size = Math.min(Material.getMaterial(fillid).getMaxStackSize(), amount_left);
+				world.dropItemNaturally(location, new ItemStack(fillid, stack_size, durability));
+				amount_left -= stack_size;
+			}
+			
+			//Player to Dispenser
+			var = stuff_inventory(container_inv, fillid, durability, play_amount_init);
+			container_inv = var.getInventory();
+			amount_left = var.getAmount();
+			
+			//Excedent back to Player
+
+			var = stuff_inventory(play_inventory, fillid, durability, amount_left);
+			play_inventory = var.getInventory();
+			amount_left = var.getAmount();
+			
+			//Excedent dropped
+			while(amount_left > 0){
+				int stack_size = Math.min(Material.getMaterial(fillid).getMaxStackSize(), amount_left);
+				world.dropItemNaturally(location, new ItemStack(fillid, stack_size, durability));
+				amount_left -= stack_size;
+			}
+			
+			
 			for(int k = 0; k<container_inv.getSize(); k++) {
 				int stack_size = Math.min(Material.getMaterial(fillid).getMaxStackSize(), total_amount);
 				if ( stack_size != 0)
@@ -296,25 +441,24 @@ public class DispenserReFill extends JavaPlugin {
 				world.dropItemNaturally(location, new ItemStack(fillid, stack_size, durability));
 				total_amount -= stack_size;
 
-			}
+			}*/
 		}
-		((BlockState) container).update();
+		//((BlockState) container).update();
 	}
 	
 	public static Block scanForNeighborChest(World world, int x, int y, int z)
 	{
-	Block block;
-	if ((block = world.getBlockAt(x - 1, y, z)).getType().equals(Material.CHEST)) {
-	return block;
+	if ((world.getBlockAt(x - 1, y, z)).getType().equals(Material.CHEST)) {
+	return world.getBlockAt(x - 1, y, z);
 	}
-	if ((block = world.getBlockAt(x + 1, y, z)).getType().equals(Material.CHEST)) {
-	return block;
+	if ((world.getBlockAt(x + 1, y, z)).getType().equals(Material.CHEST)) {
+	return world.getBlockAt(x + 1, y, z);
 	}
-	if ((block = world.getBlockAt(x, y, z - 1)).getType().equals(Material.CHEST)) {
-	return block;
+	if ((world.getBlockAt(x, y, z - 1)).getType().equals(Material.CHEST)) {
+	return world.getBlockAt(x, y, z - 1);
 	}
-	if ((block = world.getBlockAt(x, y, z + 1)).getType().equals(Material.CHEST)) {
-	return block;
+	if ((world.getBlockAt(x, y, z + 1)).getType().equals(Material.CHEST)) {
+	return world.getBlockAt(x, y, z + 1);
 	}
 	return null;
 	}
@@ -324,7 +468,103 @@ public class DispenserReFill extends JavaPlugin {
 	return scanForNeighborChest(block.getWorld(), block.getX(), block.getY(), block.getZ());
 	}
 
+	private ContainerBlock[] scanNeighborsExtended(World world, Location location) {
+		ContainerBlock[] chest =  new ContainerBlock[12];
+		int list_length = 0;
+		int x = (int) location.getX();
+		int y = (int) location.getY();
+		int z = (int) location.getZ();
+		if (world.getBlockAt(x - 1, y, z).getType().equals(Material.CHEST)) {
+			chest[list_length] = (ContainerBlock)world.getBlockAt(x - 1, y, z).getState();
+			list_length++;
+			Block tmp = scanForNeighborChest(world, x, y, z);
+			if(tmp!=null){
+				chest[list_length] = (ContainerBlock)world.getBlockAt(tmp.getLocation()).getState();
+				list_length++;
+			}
+		}
+		if (world.getBlockAt(x + 1, y, z).getType().equals(Material.CHEST)) {
+			chest[list_length] = (ContainerBlock)world.getBlockAt(x + 1, y, z).getState();
+			list_length++;
+			Block tmp = scanForNeighborChest(world, x, y, z);
+			if(tmp!=null){
+				chest[list_length] = (ContainerBlock)world.getBlockAt((int)tmp.getLocation().getX(), (int)tmp.getLocation().getY(), (int)tmp.getLocation().getZ()).getState();
+				list_length++;
+			}
+		}
+		if (world.getBlockAt(x, y + 1, z).getType().equals(Material.CHEST)) {
+			chest[list_length] = (ContainerBlock)world.getBlockAt(x, y + 1, z).getState();
+			list_length++;
+			Block tmp = scanForNeighborChest(world, x, y, z);
+			if(tmp!=null){
+				chest[list_length] = (ContainerBlock)world.getBlockAt((int)tmp.getLocation().getX(), (int)tmp.getLocation().getY(), (int)tmp.getLocation().getZ()).getState();
+				list_length++;
+			}
+		}
+		if (world.getBlockAt(x, y - 1, z).getType().equals(Material.CHEST)) {
+			chest[list_length] = (ContainerBlock)world.getBlockAt(x, y - 1, z).getState();
+			list_length++;
+			Block tmp = scanForNeighborChest(world, x, y, z);
+			if(tmp!=null){
+				chest[list_length] = (ContainerBlock)world.getBlockAt((int)tmp.getLocation().getX(), (int)tmp.getLocation().getY(), (int)tmp.getLocation().getZ()).getState();
+				list_length++;
+			}
+		}
+		if (world.getBlockAt(x, y, z - 1).getType().equals(Material.CHEST)) {
+			chest[list_length] = (ContainerBlock)world.getBlockAt(x, y, z - 1).getState();
+			list_length++;
+			Block tmp = scanForNeighborChest(world, x, y, z);
+			if(tmp!=null){
+				chest[list_length] = (ContainerBlock)world.getBlockAt((int)tmp.getLocation().getX(), (int)tmp.getLocation().getY(), (int)tmp.getLocation().getZ()).getState();
+				list_length++;
+			}
+		}
+		if (world.getBlockAt(x, y, z + 1).getType().equals(Material.CHEST)) {
+			chest[list_length] = (ContainerBlock)world.getBlockAt(x, y, z + 1).getState();
+			list_length++;
+			Block tmp = scanForNeighborChest(world, x, y, z);
+			if(tmp!=null){
+				chest[list_length] = (ContainerBlock)world.getBlockAt((int)tmp.getLocation().getX(), (int)tmp.getLocation().getY(), (int)tmp.getLocation().getZ()).getState();
+				list_length++;
+			}
+		}
+		return chest;
+	}
 
+	private ReturnVariables stuff_inventory(Inventory inventory, int fillid, short durability, int amount) {
+		if (amount != 0) {
+
+			for(int k = 0; k<inventory.getSize(); k++) {
+				int stack_size = Math.min(Material.getMaterial(fillid).getMaxStackSize(), amount);
+				inventory.addItem(new ItemStack(fillid, stack_size, durability));
+				amount -= stack_size;
+				/*int max_stack_size = Material.getMaterial(fillid).getMaxStackSize();
+				int stack_size = Math.min(max_stack_size, amount);
+				if ( stack_size > 0) {
+					if(inventory.getItem(k)!=null){
+						ItemStack itmstck = inventory.getItem(k);
+						if(itmstck.getAmount() < max_stack_size){
+							int diff = max_stack_size - itmstck.getAmount();
+							itmstck.setAmount(Math.min(itmstck.getAmount() + amount, max_stack_size));
+							amount -= diff;
+						}
+					}
+					else {
+						inventory.addItem(new ItemStack(fillid, stack_size, durability));
+						amount -= stack_size;
+					}
+					
+				}*/
+				if(amount <= 0)
+					break;
+			}
+		}
+			
+		ReturnVariables var = new ReturnVariables();
+		var.setAmount(amount);
+		var.setInventory(inventory);
+		return var;
+	}
 
 
 }
