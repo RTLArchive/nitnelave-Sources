@@ -1,0 +1,12 @@
+name: DispenserReFill
+main: com.nitnelave.DispenserReFill.DispenserReFill
+version: 0.1
+author: nitnelave
+description: Fills and refills dispensers with a command.
+commands:
+    fill:
+        description: Fills the dispenser you're facing with the item specified
+        usage: <command> [itemid or name]
+    refill:
+        description: Refills the dispenser you're facing with the first item found.
+        usage: <command>
