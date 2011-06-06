@@ -12,6 +12,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.PluginDescriptionFile;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
 
@@ -28,6 +29,9 @@ import java.util.logging.Logger;
 public class DispenserReFill extends JavaPlugin {
 	private final Logger log = Logger.getLogger("Minecraft");
 	public static PermissionHandler Permissions = null;
+
+	boolean canUseCommand = false;
+	boolean canByPassInventory = false;
 
 	public void onEnable() {
 
@@ -86,7 +90,6 @@ public class DispenserReFill extends JavaPlugin {
 	public boolean onCommand(CommandSender sender, Command cmd, String commandLabel, String[] args) {
 		String errormsg = "";
 		String command = cmd.getName();
-		boolean canUseCommand = false;
 
 		if(sender instanceof Player) {
 			Player player = (Player) sender;
@@ -100,10 +103,12 @@ public class DispenserReFill extends JavaPlugin {
 				if (permissions_config.equalsIgnoreCase("permissions")) {
 					if (Permissions != null) {
 						canUseCommand = Permissions.has(player, "DispenserReFill.fill");
+						canByPassInventory = Permissions.has(player, "DispenserReFill.bypassinventory");
 					}
 				}
 				else {
 					canUseCommand = player.isOp();
+					canByPassInventory = player.isOp();
 				}
 
 			}
@@ -145,8 +150,7 @@ public class DispenserReFill extends JavaPlugin {
 								player.sendMessage(errormsg);
 							}
 							else {
-
-								fill(block, fillid, durability);
+								fill(block, fillid, durability, player);
 							}
 							return true;
 						}
@@ -196,7 +200,7 @@ public class DispenserReFill extends JavaPlugin {
 							player.sendMessage("The chest/dispenser is empty.");
 							return true;
 						}
-						fill(block, fillid, durability);
+						fill(block, fillid, durability, player);
 						return true;
 						
 					}
@@ -223,27 +227,75 @@ public class DispenserReFill extends JavaPlugin {
 		return false;
 	}
 	
-	private void fill(Block block, int fill_id, short durability){
+	private void fill(Block block, int fillid, short durability, Player player){
 
 		ContainerBlock container = (ContainerBlock) block.getState();
-		fill_inventory(container, fill_id, durability);
+		fill_inventory(container, fillid, durability, player, block.getWorld(), block.getLocation());
 		
 		if(container instanceof Chest){
 			ContainerBlock chest = (ContainerBlock) (scanForNeighborChest(block).getState());
 			if(chest != null){
-				fill_inventory(chest, fill_id, durability);
+				fill_inventory(chest, fillid, durability, player, block.getWorld(), block.getLocation());
 
 			}
 		}
 		
 	}
 	
-	private void fill_inventory (ContainerBlock container, int fill_id, short durability){
+	private void fill_inventory (ContainerBlock container, int fillid, short durability, Player player, World world, Location location){
 		Inventory disp_inventory = container.getInventory();
-		disp_inventory.clear();
-		if (fill_id != 0) {
-			for(int k=0; k<container.getInventory().getSize(); k++) {
-				disp_inventory.addItem(new ItemStack(Material.getMaterial(fill_id), Material.getMaterial(fill_id).getMaxStackSize(), durability));
+		if(canByPassInventory) {
+			disp_inventory.clear();
+			if (fillid != 0) {
+				for(int k=0; k<container.getInventory().getSize(); k++) {
+					disp_inventory.addItem(new ItemStack(Material.getMaterial(fillid), Material.getMaterial(fillid).getMaxStackSize(), durability));
+				}
+			}
+		}
+		else {
+			Inventory play_inventory = player.getInventory();
+			Inventory container_inv = container.getInventory();
+			int play_amount_init = 0;
+			int disp_amount_init = 0;
+			for(ItemStack itemstack : play_inventory.getContents()) {
+				if(itemstack != null) {
+					if(itemstack.getTypeId() == fillid && itemstack.getDurability() == durability) {
+						play_amount_init += itemstack.getAmount();
+						play_inventory.remove(itemstack);
+					}
+				}
+			}
+			for(ItemStack itemstack : container_inv.getContents()) {
+				if(itemstack != null) {
+					if(itemstack.getTypeId() == fillid && itemstack.getDurability() == durability) {
+						disp_amount_init += itemstack.getAmount();
+					}
+					else {
+						world.dropItemNaturally(location, itemstack);
+					}
+				}
+			}
+			container_inv.clear();
+			int total_amount = play_amount_init + disp_amount_init;
+			for(int k = 0; k<container_inv.getSize(); k++) {
+				int stack_size = Math.min(Material.getMaterial(fillid).getMaxStackSize(), total_amount);
+				if ( stack_size != 0)
+					container_inv.addItem(new ItemStack(fillid, stack_size, durability));
+				total_amount -= stack_size;
+				if(total_amount == 0)
+					break;
+			}
+			while (total_amount > 0 && player.getInventory().firstEmpty() != -1) {
+				int stack_size = Math.min(Material.getMaterial(fillid).getMaxStackSize(), total_amount);
+				if ( stack_size != 0)
+					player.getInventory().addItem(new ItemStack(fillid, stack_size, durability));
+				total_amount -= stack_size;
+			}
+			while(total_amount > 0){
+				int stack_size = Math.min(Material.getMaterial(fillid).getMaxStackSize(), total_amount);
+				world.dropItemNaturally(location, new ItemStack(fillid, stack_size, durability));
+				total_amount -= stack_size;
+
 			}
 		}
 		((BlockState) container).update();
