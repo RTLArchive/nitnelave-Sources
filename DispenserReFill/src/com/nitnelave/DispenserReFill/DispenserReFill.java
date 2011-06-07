@@ -20,10 +20,13 @@ import org.bukkit.World;
 import com.nijiko.permissions.PermissionHandler;
 import com.nijikokun.bukkit.Permissions.Permissions;
 
+import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
+import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.logging.Logger;
 
 
@@ -33,6 +36,7 @@ public class DispenserReFill extends JavaPlugin {
 
 	boolean canUseCommand = false;
 	boolean canByPassInventory = false;
+	boolean logRefresh = true;
 
 	public void onEnable() {
 
@@ -42,7 +46,9 @@ public class DispenserReFill extends JavaPlugin {
 		}
 
 		File yml = new File(getDataFolder()+"/config.yml");
+		File refill = new File(getDataFolder()+"/refill.yml");
 
+		//create the config 
 		if (!yml.exists()) {
 			new File(getDataFolder().toString()).mkdir();
 			try {
@@ -57,6 +63,9 @@ public class DispenserReFill extends JavaPlugin {
 
 				out.write("use-permissions: OP   #can be OP, permissions or false");
 				out.newLine();
+				out.write("refresh-frequency: 60      #in seconds");
+				out.newLine();
+				out.write("log-refresh: true");
 
 				//Close the output stream
 				out.close();
@@ -65,12 +74,42 @@ public class DispenserReFill extends JavaPlugin {
 				log.warning("[DispenserReFill] Cannot write config file: "+e);
 			}
 		}
-
 		
+		logRefresh = getConfiguration().getBoolean("log-refresh", true);
+
+		//create the list of containers to refill
+		if(!refill.exists()) {
+			new File(getDataFolder().toString()).mkdir();
+			try {
+				refill.createNewFile();
+			}
+			catch (IOException ex) {
+				log.warning("[DispenserReFill] Cannot create file "+refill.getPath());
+			}
+		}
+
+		int period = 0;
+		try {
+			period = getConfiguration().getInt("refresh-frequency", 60);
+			log.info("[DispenserReFill] Refresh period set to " + period+" seconds.");
+		}
+		catch (Exception e) {
+			log.warning("[DispenserReFill] Wrong value for refill-frequency. Defaulting to 600 seconds");
+			period = 600;
+		}
+
+		if( getServer().getScheduler().scheduleAsyncRepeatingTask(this, new Runnable() {
+			public void run() {
+				refill_auto();
+			}}, 200, period * 20) == -1)
+			log.warning("[DispenserReFill] Impossible to schedule the re-filling task. Auto-refill will not work");
+
 		setup_permissions();
 		PluginDescriptionFile pdfFile = this.getDescription();
 
-		log.info("[DispenserReFill] "+ pdfFile.getVersion() + "by nitnelave is enabled");
+		log.info("[DispenserReFill] "+ pdfFile.getVersion() + " by nitnelave is enabled");
+
+
 	}
 
 	public void onDisable() {
@@ -121,7 +160,7 @@ public class DispenserReFill extends JavaPlugin {
 				if(command.equalsIgnoreCase("dfill")) {
 					if(args.length > 0) {
 
-						Block block = player.getTargetBlock(null, 100);
+						Block block = player.getTargetBlock(null, 1000);
 						if(block.getTypeId() == 23 || block.getTypeId() == 54) {
 							short durability = 0;
 							int fillid = 0;
@@ -134,7 +173,7 @@ public class DispenserReFill extends JavaPlugin {
 									errormsg = "Wrong durability. Syntax : /fill [id] [durability]";
 								}
 							}
-							
+
 							try {
 								fillid = Integer.parseInt(args[0]);
 							}
@@ -164,53 +203,68 @@ public class DispenserReFill extends JavaPlugin {
 				}
 				else if(command.equalsIgnoreCase("drefill")) {
 
-					Block block = player.getTargetBlock(null, 100);
-					if(block.getTypeId() == 23 || block.getTypeId() == 54) {
+					Block block = player.getTargetBlock(null, 1000);
+					refill(block, player);
+					return true;
+				}
+				else if(command.equalsIgnoreCase("dautofill")) {
 
-						int fillid = 0;
-						short durability = 0;
-						ContainerBlock container = (ContainerBlock) block.getState();
-						Inventory disp_inventory = container.getInventory();
-						for(int k=0; k<disp_inventory.getSize(); k++) {
-							try {
-								fillid = disp_inventory.getContents()[k].getTypeId();
-								durability = disp_inventory.getContents()[k].getDurability();
-								break;
-							}
-							catch (NullPointerException e){
-								
-							}
-						}
-						if(container instanceof Chest && fillid == 0){
-							ContainerBlock chest = (ContainerBlock) (scanForNeighborChest(block).getState());
-							if(chest != null){
-								Inventory chest_inventory = chest.getInventory();
-								for(int k=0; k<chest_inventory.getSize(); k++) {
-									try {
-										fillid = chest_inventory.getContents()[k].getTypeId();
-										durability = chest_inventory.getContents()[k].getDurability();
-										break;
-									}
-									catch (NullPointerException e){
-										
-									}
+					if(args.length > 0) {
+
+						Block block = player.getTargetBlock(null, 1000);
+						if(block.getTypeId() == 23 || (block.getTypeId() == 54 && canByPassInventory)) {
+							short durability = 0;
+							int fillid = 0;
+							if(args.length > 1) {
+
+								try {
+									durability = Short.parseShort(args[1]);
+								}
+								catch (NumberFormatException e) {
+									errormsg = "Wrong durability. Syntax : /dautofill [id] [durability]";
 								}
 							}
+
+							try {
+								fillid = Integer.parseInt(args[0]);
+							}
+							catch (NumberFormatException e) {
+								String itemstring = args[0].toUpperCase();
+								try {
+									fillid = Material.getMaterial(itemstring).getId();
+								}
+								catch (NullPointerException n) {
+									errormsg = "The item '"+itemstring+"' does not exist.";
+								}
+							}
+							if(errormsg.length() > 0) {
+								player.sendMessage(errormsg);
+							}
+							else {
+								refill_auto_create(canByPassInventory, player.getTargetBlock(null, 100), fillid, durability, false);
+							}
 						}
-						if(fillid == 0) {
-							player.sendMessage("The chest/dispenser is empty.");
-							return true;
+						else {
+							player.sendMessage("The block is not a chest/dispenser. You must face a chest/dispenser.");
 						}
-						fill(block, fillid, durability, player);
 						return true;
-						
+					}
+					return false;
+
+				}
+				else if(command.equalsIgnoreCase("dautorefill")) {
+					Block block = player.getTargetBlock(null, 1000);
+					if(block == null)
+						log.warning("null block");
+					if(block.getTypeId() == 23 || (block.getTypeId() == 54 && canByPassInventory)) {
+						refill_auto_create(canByPassInventory, block);
 					}
 					else {
 						player.sendMessage("The block is not a chest/dispenser. You must face a chest/dispenser.");
-						return true;
 					}
+					
+					return true;
 				}
-
 			}
 			else{
 				player.sendMessage("You do not have permission to do this");
@@ -227,12 +281,71 @@ public class DispenserReFill extends JavaPlugin {
 
 		return false;
 	}
-	
+
+	private int[] refill(Block block, Player player) {
+		int[] return_values = new int[2];
+		int fillid = 0;
+		short durability = 0;
+		if(block.getTypeId() == 23 || block.getTypeId() == 54) {
+			ContainerBlock container = (ContainerBlock) block.getState();
+			Inventory disp_inventory = container.getInventory();
+			for(int k=0; k<disp_inventory.getSize(); k++) {
+				try {
+					fillid = disp_inventory.getContents()[k].getTypeId();
+					durability = disp_inventory.getContents()[k].getDurability();
+					break;
+				}
+				catch (NullPointerException e){
+
+				}
+			}
+			if(container instanceof Chest && fillid == 0){
+				ContainerBlock chest = (ContainerBlock) (scanForNeighborChest(block).getState());
+				if(chest != null){
+					Inventory chest_inventory = chest.getInventory();
+					for(int k=0; k<chest_inventory.getSize(); k++) {
+						try {
+							fillid = chest_inventory.getContents()[k].getTypeId();
+							durability = chest_inventory.getContents()[k].getDurability();
+							break;
+						}
+						catch (NullPointerException e){
+
+						}
+					}
+				}
+			}
+			if(fillid == 0) {
+				if(player!=null) 
+					player.sendMessage("The chest/dispenser is empty.");
+				else {
+					log.warning("The chest/dispenser at "+block.getX()+","+block.getY()+","+block.getZ()+" in world '"+block.getWorld().getName()+"' is empty.");
+				}
+				return_values[0]=fillid;
+				return_values[1]=(int)durability;
+				return return_values;
+			}
+			fill(block, fillid, durability, player);
+			return_values[0]=fillid;
+			return_values[1]=(int)durability;
+			return return_values;
+			}
+		else {
+			if(player!=null)
+				player.sendMessage("The block is not a chest/dispenser. You must face a chest/dispenser.");
+			else
+				log.warning("The block at"+block.getX()+","+block.getY()+","+block.getZ()+" in "+block.getWorld().getName()+" is not a chest/dispenser.");
+			return_values[0]=fillid;
+			return_values[1]=(int)durability;
+			return return_values;
+		}
+	}
+
 	private void fill(Block block, int fillid, short durability, Player player){
 
 		ContainerBlock container = (ContainerBlock) block.getState();
 		fill_inventory(container, fillid, durability, player, block.getWorld(), block.getLocation());
-		
+
 		if(container instanceof Chest){
 			Block tmp = scanForNeighborChest(block);
 			ContainerBlock chest = null;
@@ -243,9 +356,9 @@ public class DispenserReFill extends JavaPlugin {
 
 			}
 		}
-		
+
 	}
-	
+
 	private void fill_inventory (ContainerBlock container, int fillid, short durability, Player player, World world, Location location){
 		Inventory disp_inventory = container.getInventory();
 		if(canByPassInventory) {
@@ -260,7 +373,11 @@ public class DispenserReFill extends JavaPlugin {
 			ContainerBlock[] chests = new ContainerBlock[12];
 			if(container instanceof Dispenser)
 				chests = scanNeighborsExtended(world, location);
-			Inventory play_inventory = player.getInventory();
+			Inventory play_inventory = null;
+			if(player!=null) {
+				play_inventory = player.getInventory();
+			}
+
 			Inventory container_inv = container.getInventory();
 			int play_amount_init = 0;
 			int disp_amount_init = 0;
@@ -285,15 +402,18 @@ public class DispenserReFill extends JavaPlugin {
 				}
 				else 
 					break;
-				
-				
+
+
 			}
 			//Player to storage
-			for(ItemStack itemstack : play_inventory.getContents()) {
-				if(itemstack != null) {
-					if(itemstack.getTypeId() == fillid && itemstack.getDurability() == durability) {
-						play_amount_init += itemstack.getAmount();
-						play_inventory.remove(itemstack);
+			if(play_inventory!=null) {
+
+				for(ItemStack itemstack : play_inventory.getContents()) {
+					if(itemstack != null) {
+						if(itemstack.getTypeId() == fillid && itemstack.getDurability() == durability) {
+							play_amount_init += itemstack.getAmount();
+							play_inventory.remove(itemstack);
+						}
 					}
 				}
 			}
@@ -315,7 +435,7 @@ public class DispenserReFill extends JavaPlugin {
 							}
 							else
 								break;
-							
+
 						}
 						if(!added)
 							world.dropItemNaturally(location, itemstack);
@@ -326,18 +446,20 @@ public class DispenserReFill extends JavaPlugin {
 			container.getInventory().clear();
 			((BlockState) container).update();
 			container_inv = container.getInventory();
-			
+
 			int total_amount = play_amount_init + disp_amount_init + chest_amount_init;
-			
+
 			ReturnVariables var = stuff_inventory(container_inv, fillid, durability, total_amount);
 			int amount_left = var.getAmount();
 			disp_inventory = var.getInventory();
 			((BlockState) container).update();
 
-			
-			var = stuff_inventory(play_inventory, fillid, durability, Math.min(amount_left, play_amount_init));
-			amount_left = amount_left - Math.min(amount_left, play_amount_init) + var.getAmount();
-			play_inventory = var.getInventory();
+			if(play_inventory != null) {
+
+				var = stuff_inventory(play_inventory, fillid, durability, Math.min(amount_left, play_amount_init));
+				amount_left = amount_left - Math.min(amount_left, play_amount_init) + var.getAmount();
+				play_inventory = var.getInventory();
+			}
 
 			for(ContainerBlock chest : chests) {
 				if(chest != null && amount_left > 0) {
@@ -369,7 +491,7 @@ public class DispenserReFill extends JavaPlugin {
 				}
 				else
 					break;
-				
+
 			}
 			//Excedent dropped
 			while(amount_left > 0){
@@ -377,13 +499,13 @@ public class DispenserReFill extends JavaPlugin {
 				world.dropItemNaturally(location, new ItemStack(fillid, stack_size, durability));
 				amount_left -= stack_size;
 			}
-			
-			
+
+
 			//Chest in storage to Dispenser
 			var = stuff_inventory(container_inv, fillid, durability, chest_amount_init);
 			container_inv = var.getInventory();
 			amount_left = var.getAmount();
-			
+
 			//Excedent in Chests
 
 			for(ContainerBlock chest : chests) {
@@ -394,7 +516,7 @@ public class DispenserReFill extends JavaPlugin {
 				chest_inv = var.getInventory();
 				amount_left = var.getAmount();
 				((BlockState) chest).update();
-				
+
 			}
 			//Excedent dropped
 			while(amount_left > 0){
@@ -402,26 +524,26 @@ public class DispenserReFill extends JavaPlugin {
 				world.dropItemNaturally(location, new ItemStack(fillid, stack_size, durability));
 				amount_left -= stack_size;
 			}
-			
+
 			//Player to Dispenser
 			var = stuff_inventory(container_inv, fillid, durability, play_amount_init);
 			container_inv = var.getInventory();
 			amount_left = var.getAmount();
-			
+
 			//Excedent back to Player
 
 			var = stuff_inventory(play_inventory, fillid, durability, amount_left);
 			play_inventory = var.getInventory();
 			amount_left = var.getAmount();
-			
+
 			//Excedent dropped
 			while(amount_left > 0){
 				int stack_size = Math.min(Material.getMaterial(fillid).getMaxStackSize(), amount_left);
 				world.dropItemNaturally(location, new ItemStack(fillid, stack_size, durability));
 				amount_left -= stack_size;
 			}
-			
-			
+
+
 			for(int k = 0; k<container_inv.getSize(); k++) {
 				int stack_size = Math.min(Material.getMaterial(fillid).getMaxStackSize(), total_amount);
 				if ( stack_size != 0)
@@ -445,90 +567,93 @@ public class DispenserReFill extends JavaPlugin {
 		}
 		//((BlockState) container).update();
 	}
-	
+
 	public static Block scanForNeighborChest(World world, int x, int y, int z)
 	{
-	if ((world.getBlockAt(x - 1, y, z)).getType().equals(Material.CHEST)) {
-	return world.getBlockAt(x - 1, y, z);
-	}
-	if ((world.getBlockAt(x + 1, y, z)).getType().equals(Material.CHEST)) {
-	return world.getBlockAt(x + 1, y, z);
-	}
-	if ((world.getBlockAt(x, y, z - 1)).getType().equals(Material.CHEST)) {
-	return world.getBlockAt(x, y, z - 1);
-	}
-	if ((world.getBlockAt(x, y, z + 1)).getType().equals(Material.CHEST)) {
-	return world.getBlockAt(x, y, z + 1);
-	}
-	return null;
+		if ((world.getBlockAt(x - 1, y, z)).getType().equals(Material.CHEST)) {
+			return world.getBlockAt(x - 1, y, z);
+		}
+		if ((world.getBlockAt(x + 1, y, z)).getType().equals(Material.CHEST)) {
+			return world.getBlockAt(x + 1, y, z);
+		}
+		if ((world.getBlockAt(x, y, z - 1)).getType().equals(Material.CHEST)) {
+			return world.getBlockAt(x, y, z - 1);
+		}
+		if ((world.getBlockAt(x, y, z + 1)).getType().equals(Material.CHEST)) {
+			return world.getBlockAt(x, y, z + 1);
+		}
+		return null;
 	}
 
 	public static Block scanForNeighborChest(Block block)
 	{
-	return scanForNeighborChest(block.getWorld(), block.getX(), block.getY(), block.getZ());
+		return scanForNeighborChest(block.getWorld(), block.getX(), block.getY(), block.getZ());
 	}
 
 	private ContainerBlock[] scanNeighborsExtended(World world, Location location) {
-		ContainerBlock[] chest =  new ContainerBlock[12];
+		Block[] chest =  new Block[12];
 		int list_length = 0;
 		int x = (int) location.getX();
 		int y = (int) location.getY();
 		int z = (int) location.getZ();
 		if (world.getBlockAt(x - 1, y, z).getType().equals(Material.CHEST)) {
-			chest[list_length] = (ContainerBlock)world.getBlockAt(x - 1, y, z).getState();
+			chest[list_length] = world.getBlockAt(x - 1, y, z);
 			list_length++;
-			Block tmp = scanForNeighborChest(world, x, y, z);
+			Block tmp = scanForNeighborChest(world, x - 1, y, z);
 			if(tmp!=null){
-				chest[list_length] = (ContainerBlock)world.getBlockAt(tmp.getLocation()).getState();
+				chest[list_length] = world.getBlockAt(tmp.getLocation());
 				list_length++;
 			}
 		}
 		if (world.getBlockAt(x + 1, y, z).getType().equals(Material.CHEST)) {
-			chest[list_length] = (ContainerBlock)world.getBlockAt(x + 1, y, z).getState();
+			chest[list_length] = world.getBlockAt(x + 1, y, z);
 			list_length++;
-			Block tmp = scanForNeighborChest(world, x, y, z);
+			Block tmp = scanForNeighborChest(world, x + 1, y, z);
 			if(tmp!=null){
-				chest[list_length] = (ContainerBlock)world.getBlockAt((int)tmp.getLocation().getX(), (int)tmp.getLocation().getY(), (int)tmp.getLocation().getZ()).getState();
+				chest[list_length] = world.getBlockAt(tmp.getLocation());
 				list_length++;
 			}
 		}
 		if (world.getBlockAt(x, y + 1, z).getType().equals(Material.CHEST)) {
-			chest[list_length] = (ContainerBlock)world.getBlockAt(x, y + 1, z).getState();
+			chest[list_length] = world.getBlockAt(x, y + 1, z);
 			list_length++;
-			Block tmp = scanForNeighborChest(world, x, y, z);
+			Block tmp = scanForNeighborChest(world, x, y + 1, z);
 			if(tmp!=null){
-				chest[list_length] = (ContainerBlock)world.getBlockAt((int)tmp.getLocation().getX(), (int)tmp.getLocation().getY(), (int)tmp.getLocation().getZ()).getState();
+				chest[list_length] = world.getBlockAt(tmp.getLocation());
 				list_length++;
 			}
 		}
 		if (world.getBlockAt(x, y - 1, z).getType().equals(Material.CHEST)) {
-			chest[list_length] = (ContainerBlock)world.getBlockAt(x, y - 1, z).getState();
+			chest[list_length] = world.getBlockAt(x, y - 1, z);
 			list_length++;
-			Block tmp = scanForNeighborChest(world, x, y, z);
+			Block tmp = scanForNeighborChest(world, x, y - 1, z);
 			if(tmp!=null){
-				chest[list_length] = (ContainerBlock)world.getBlockAt((int)tmp.getLocation().getX(), (int)tmp.getLocation().getY(), (int)tmp.getLocation().getZ()).getState();
+				chest[list_length] = world.getBlockAt(tmp.getLocation());
 				list_length++;
 			}
 		}
 		if (world.getBlockAt(x, y, z - 1).getType().equals(Material.CHEST)) {
-			chest[list_length] = (ContainerBlock)world.getBlockAt(x, y, z - 1).getState();
+			chest[list_length] = world.getBlockAt(x, y, z - 1);
 			list_length++;
-			Block tmp = scanForNeighborChest(world, x, y, z);
+			Block tmp = scanForNeighborChest(world, x, y, z - 1);
 			if(tmp!=null){
-				chest[list_length] = (ContainerBlock)world.getBlockAt((int)tmp.getLocation().getX(), (int)tmp.getLocation().getY(), (int)tmp.getLocation().getZ()).getState();
+				chest[list_length] = world.getBlockAt(tmp.getLocation());
 				list_length++;
 			}
 		}
 		if (world.getBlockAt(x, y, z + 1).getType().equals(Material.CHEST)) {
-			chest[list_length] = (ContainerBlock)world.getBlockAt(x, y, z + 1).getState();
+			chest[list_length] = world.getBlockAt(x, y, z + 1);
 			list_length++;
-			Block tmp = scanForNeighborChest(world, x, y, z);
+			Block tmp = scanForNeighborChest(world, x, y, z + 1);
 			if(tmp!=null){
-				chest[list_length] = (ContainerBlock)world.getBlockAt((int)tmp.getLocation().getX(), (int)tmp.getLocation().getY(), (int)tmp.getLocation().getZ()).getState();
+				chest[list_length] = world.getBlockAt(tmp.getLocation());
 				list_length++;
 			}
 		}
-		return chest;
+		ContainerBlock[] cont_chest = new ContainerBlock[12];
+		for(int k = 0; chest[k]!=null; k++) 
+			cont_chest[k] = (ContainerBlock) chest[k].getState();
+		return cont_chest;
 	}
 
 	private ReturnVariables stuff_inventory(Inventory inventory, int fillid, short durability, int amount) {
@@ -553,17 +678,104 @@ public class DispenserReFill extends JavaPlugin {
 						inventory.addItem(new ItemStack(fillid, stack_size, durability));
 						amount -= stack_size;
 					}
-					
+
 				}*/
 				if(amount <= 0)
 					break;
 			}
 		}
-			
+
 		ReturnVariables var = new ReturnVariables();
 		var.setAmount(amount);
 		var.setInventory(inventory);
 		return var;
+	}
+
+	public void refill_auto_create(boolean spawn_items, Block block) {
+		refill_auto_create(spawn_items, block, 0, (short) 0, true);
+	}
+	public void refill_auto_create(boolean spawn_items, Block block, int fillid, short durability, boolean refill) {
+		File refill_file = new File(getDataFolder()+"/refill.yml");
+
+
+		try {
+			BufferedWriter out = new BufferedWriter(new FileWriter(refill_file, true));
+			int[] result = new int[2];
+			String str = block.getX()+";"+block.getY()+";"+block.getZ()+";"+block.getWorld().getName()+";"+spawn_items+";"+fillid+";"+durability+";"+refill;
+			if((result = refill(block, null))[0] != 0)
+				str = (block.getX()+";"+block.getY()+";"+block.getZ()+";"+block.getWorld().getName()+";"+spawn_items+";"+result[0]+";"+result[1]+";"+refill);
+			
+			out.write(str);
+			out.newLine();
+
+			//Close the output stream
+			out.close();
+		}
+		catch (IOException e) {
+			log.warning("[DispenserReFill] Cannot write refill file: "+e);
+		}
+
+	}
+
+	public void refill_auto() {
+		File refill_file = new File(getDataFolder()+"/refill.yml");
+
+		try {
+			BufferedReader in = new BufferedReader(new FileReader(refill_file));
+			String str;
+			ArrayList<String> file_lines = new ArrayList<String>();
+			while((str = in.readLine())!= null) {
+				String[] args = str.split(";");
+				int x = Integer.parseInt(args[0]);
+				int y = Integer.parseInt(args[1]);
+				int z = Integer.parseInt(args[2]);
+				World world = getServer().getWorld(args[3]);
+				canByPassInventory = Boolean.parseBoolean(args[4]);
+				int fillid = Integer.parseInt(args[5]);
+				short durability = Short.parseShort(args[6]);
+				boolean refill = Boolean.parseBoolean(args[7]);
+				Block block = world.getBlockAt(x, y, z);
+				if(block != null) {
+					if(block.getTypeId() == 23 || block.getTypeId() == 54) {
+						if(refill) {
+							int[] result = new int[2];
+							if((result = refill(world.getBlockAt(x, y, z), null))[0] == 0){
+								fill(world.getBlockAt(x, y, z), fillid, durability, null);
+							}
+							else {
+								str = (x+";"+y+";"+z+";"+world.getName()+";"+canByPassInventory+";"+result[0]+";"+result[1]+";true");
+							}
+						}
+						else {
+							fill(world.getBlockAt(x, y, z), fillid, durability, null);
+						}
+						file_lines.add(str);
+					}
+				}
+				if(!refill_file.delete()) {
+					log.warning("[DispenserReFill] Could not rewrite file refill.yml");
+				}
+				try {
+					BufferedWriter out = new BufferedWriter(new FileWriter(refill_file));
+					for(String tmp_str : file_lines) {
+						out.write(tmp_str);
+						out.newLine();
+					}
+					out.close();
+				}
+				catch (IOException e) {
+					log.warning("[DispenserReFill] Could not write to file refill.yml: "+e);
+				}
+
+
+
+			}
+		}
+		catch (IOException e) {
+			log.warning("[DispenserReFill] Cannot read refill file refill.yml: "+e);
+		}
+		if(logRefresh)
+			log.info("[DispenserReFill] Refresh finished");
 	}
 
 
