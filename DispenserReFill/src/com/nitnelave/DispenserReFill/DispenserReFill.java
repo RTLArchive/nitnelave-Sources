@@ -27,6 +27,7 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Scanner;
 import java.util.logging.Logger;
 
 
@@ -34,9 +35,11 @@ public class DispenserReFill extends JavaPlugin {
 	private final Logger log = Logger.getLogger("Minecraft");
 	public static PermissionHandler Permissions = null;
 
-	boolean canUseCommand = false;
-	boolean canByPassInventory = false;
+	boolean canUseCommand = true;
+	boolean canUseAuto = true;
+	boolean canByPassInventory = true;
 	boolean logRefresh = true;
+	String permissions_config = null;
 
 	public void onEnable() {
 
@@ -76,6 +79,7 @@ public class DispenserReFill extends JavaPlugin {
 		}
 		
 		logRefresh = getConfiguration().getBoolean("log-refresh", true);
+		permissions_config = getConfiguration().getString("use-permissions", "OP").trim();
 
 		//create the list of containers to refill
 		if(!refill.exists()) {
@@ -135,8 +139,6 @@ public class DispenserReFill extends JavaPlugin {
 			Player player = (Player) sender;
 
 
-			String permissions_config = null;
-			permissions_config = getConfiguration().getString("use-permissions", "OP").trim();
 
 
 			if (permissions_config.equalsIgnoreCase("permissions") || permissions_config.equalsIgnoreCase("OP")) {
@@ -144,11 +146,13 @@ public class DispenserReFill extends JavaPlugin {
 					if (Permissions != null) {
 						canUseCommand = Permissions.has(player, "DispenserReFill.fill");
 						canByPassInventory = Permissions.has(player, "DispenserReFill.bypassinventory");
+						canUseAuto = Permissions.has(player, "DispenserReFill.auto");
 					}
 				}
 				else {
 					canUseCommand = player.isOp();
 					canByPassInventory = player.isOp();
+					canUseAuto = player.isOp();
 				}
 
 			}
@@ -194,8 +198,12 @@ public class DispenserReFill extends JavaPlugin {
 							}
 							return true;
 						}
+						else if(block.getTypeId() == 0) {
+							player.sendMessage("No block in sight (or too far?)");
+							return true;
+						}
 						else {
-							player.sendMessage("The block is not a chest/dispenser. You must face a chest/dispenser.");
+							player.sendMessage(block.getType().toString()+": The block is not a chest/dispenser. You must face a chest/dispenser.");
 							return true;
 						}
 					}
@@ -244,8 +252,12 @@ public class DispenserReFill extends JavaPlugin {
 								refill_auto_create(canByPassInventory, player.getTargetBlock(null, 100), fillid, durability, false);
 							}
 						}
+						else if(block.getTypeId() == 0) {
+							player.sendMessage("No block in sight (or too far?)");
+							return true;
+						}
 						else {
-							player.sendMessage("The block is not a chest/dispenser. You must face a chest/dispenser.");
+							player.sendMessage(block.getType().toString()+": The block is not a dispenser. You must face a dispenser.");
 						}
 						return true;
 					}
@@ -260,7 +272,7 @@ public class DispenserReFill extends JavaPlugin {
 						refill_auto_create(canByPassInventory, block);
 					}
 					else {
-						player.sendMessage("The block is not a chest/dispenser. You must face a chest/dispenser.");
+						player.sendMessage(block.getType().toString()+": The block is not a chest/dispenser. You must face a chest/dispenser.");
 					}
 					
 					return true;
@@ -330,9 +342,13 @@ public class DispenserReFill extends JavaPlugin {
 			return_values[1]=(int)durability;
 			return return_values;
 			}
+		else if(block.getTypeId() == 0) {
+			player.sendMessage("No block in sight (or too far?)");
+			return return_values;
+		}
 		else {
 			if(player!=null)
-				player.sendMessage("The block is not a chest/dispenser. You must face a chest/dispenser.");
+				player.sendMessage(block.getType().toString()+": The block is not a chest/dispenser. You must face a chest/dispenser.");
 			else
 				log.warning("The block at"+block.getX()+","+block.getY()+","+block.getZ()+" in "+block.getWorld().getName()+" is not a chest/dispenser.");
 			return_values[0]=fillid;
@@ -696,25 +712,35 @@ public class DispenserReFill extends JavaPlugin {
 	}
 	public void refill_auto_create(boolean spawn_items, Block block, int fillid, short durability, boolean refill) {
 		File refill_file = new File(getDataFolder()+"/refill.yml");
+		try{
+			Scanner scan = new Scanner(refill_file);
+			if (!scan.hasNext(block.getX()+";"+block.getY()+";"+block.getZ()+";"+block.getWorld().getName())) {
+				try {
+					BufferedWriter out = new BufferedWriter(new FileWriter(refill_file, true));
+					int[] result = new int[2];
+					String str = block.getX()+";"+block.getY()+";"+block.getZ()+";"+block.getWorld().getName()+";"+spawn_items+";"+fillid+";"+durability+";"+refill;
+					if((result = refill(block, null))[0] != 0)
+						str = (block.getX()+";"+block.getY()+";"+block.getZ()+";"+block.getWorld().getName()+";"+spawn_items+";"+result[0]+";"+result[1]+";"+refill);
+					
+					out.write(str);
+					out.newLine();
 
+					//Close the output stream
+					out.close();
+				}
+				catch (IOException e) {
+					log.warning("[DispenserReFill] Cannot write refill file: "+e);
+				}
 
-		try {
-			BufferedWriter out = new BufferedWriter(new FileWriter(refill_file, true));
-			int[] result = new int[2];
-			String str = block.getX()+";"+block.getY()+";"+block.getZ()+";"+block.getWorld().getName()+";"+spawn_items+";"+fillid+";"+durability+";"+refill;
-			if((result = refill(block, null))[0] != 0)
-				str = (block.getX()+";"+block.getY()+";"+block.getZ()+";"+block.getWorld().getName()+";"+spawn_items+";"+result[0]+";"+result[1]+";"+refill);
-			
-			out.write(str);
-			out.newLine();
-
-			//Close the output stream
-			out.close();
+			}
+				
 		}
-		catch (IOException e) {
-			log.warning("[DispenserReFill] Cannot write refill file: "+e);
+		catch(Exception e) {
+			log.warning("[DispenserReFill] Could not scan refill file: "+e);
 		}
 
+
+		
 	}
 
 	public void refill_auto() {

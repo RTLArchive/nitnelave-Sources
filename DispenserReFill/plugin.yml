@@ -1,18 +1,18 @@
 name: DispenserReFill
 main: com.nitnelave.DispenserReFill.DispenserReFill
-version: 0.5b
+version: 0.5
 author: nitnelave
 description: Fills and refills dispensers with a command.
 commands:
     dfill:
         description: Fills the dispenser/chest you're facing with the item specified
-        usage: <command> [itemid or name]
+        usage: /<command> [itemid or name]
     drefill:
         description: Refills the dispenser/chest you're facing with the first item found.
-        usage: <command>
+        usage: /<command>
     dautofill:
         description: Creates an automatically refilling dispenser/chest full of the item specified
-        usage: <command> [itemid or name]
+        usage: /<command> [itemid or name]
     dautorefill:
         description: Creates an automatically refilling dispenser/chest
-        usage: <command>
+        usage: /<command>
