@@ -774,7 +774,7 @@ public class DispenserReFill extends JavaPlugin {
 						file_lines.add(str);
 					}
 				}
-				if(!refill_file.delete()) { //delete file to update
+				if (!refill_file.delete()) { //delete file to update
 					log.warning("[DispenserReFill] Could not rewrite file refill.yml");
 				}
 				try { //rewrite the file

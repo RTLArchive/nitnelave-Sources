@@ -2,7 +2,7 @@ name: DispenserReFill
 main: com.nitnelave.DispenserReFill.DispenserReFill
 version: 1.0
 author: nitnelave
-description: Fills and refills dispensers with a command.
+description: Fills and refills dispensers and chests with a command.
 commands:
     dfill:
         description: Fills the dispenser/chest you're facing with the item specified 
