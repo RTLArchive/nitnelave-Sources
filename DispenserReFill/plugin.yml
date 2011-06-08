@@ -1,6 +1,6 @@
 name: DispenserReFill
 main: com.nitnelave.DispenserReFill.DispenserReFill
-version: 0.5
+version: 1.0
 author: nitnelave
 description: Fills and refills dispensers with a command.
 commands:
