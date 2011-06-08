@@ -158,7 +158,7 @@ public class DispenserReFill extends JavaPlugin {
 			}
 			else if(!permissions_config.equalsIgnoreCase("false")){
 				log.warning("[DispenserReFill] : Bad option for use-permissions : "+permissions_config);
-				return true;
+				return true; 
 			}
 			if(canUseCommand) {
 				if(command.equalsIgnoreCase("dfill")) {
