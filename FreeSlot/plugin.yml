@@ -1,6 +1,6 @@
 name: FreeSlot
 main: com.nitnelave.FreeSlot.FreeSlot
-version: 0.1
+version: 1.0
 author: nitnelave
 description: Gets the number of free slots in a player's inventory -- console only
 commands:
