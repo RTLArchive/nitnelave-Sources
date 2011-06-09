@@ -1,6 +1,8 @@
 package com.GiftSend.GiftSend;
 
 //java stuff
+import info.somethingodd.bukkit.OddItem.OddItem;
+
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
@@ -28,26 +30,32 @@ import com.nijikokun.bukkit.Permissions.Permissions;
 import com.nijiko.permissions.PermissionHandler;
 
 public class GiftSend extends JavaPlugin{
-	private final Logger log = Logger.getLogger("Minecraft");
+	private static Logger log = Logger.getLogger("Minecraft");
 	public static PermissionHandler Permissions = null;
 	private final SGPlayerListener playerListener = new SGPlayerListener(this);
 	private int maxradius = 0;
 	private String allowoffline = null;
+	public static OddItem OI = null;
+	private static GiftSend plugin;
+	private static File dataFolder;
+
 
 	public void onDisable() {
 		log.info("[GiftSend] Disabled");
 	}
 
 	public void onEnable() {
-		if (!new File(getDataFolder().toString()).exists() ) {
-			new File(getDataFolder().toString()).mkdir();
+		dataFolder = getDataFolder();
+		if (!new File(dataFolder.toString()).exists() ) {
+			new File(dataFolder.toString()).mkdir();
 		}
+		plugin = this;
 
-		File yml = new File(getDataFolder()+"/config.yml");
-		File offlinesends = new File(getDataFolder()+"/offline.txt");
+		File yml = new File(dataFolder+"/config.yml");
+		File offlinesends = new File(dataFolder+"/offline.txt");
 
 		if (!yml.exists()) {
-			new File(getDataFolder().toString()).mkdir();
+			new File(dataFolder.toString()).mkdir();
 			try {
 				yml.createNewFile();
 			}
@@ -93,6 +101,10 @@ public class GiftSend extends JavaPlugin{
 
 		setupPermissions();
 
+		OI = (OddItem) getServer().getPluginManager().getPlugin("OddItem");
+		if(OI != null) {
+			log.info("[GiftSend] Successfully connected with OddItem");
+		}
 		//Print that the plugin has been enabled!
 		log.info("[GiftSend] version " + pdfFile.getVersion() + " by nitnelave is enabled!");
 	}
@@ -103,13 +115,13 @@ public class GiftSend extends JavaPlugin{
 		if(Permissions == null) {
 			if(test != null) {
 				Permissions = ((Permissions)test).getHandler();
+				log.info("[GiftSend] Successfully connected with Permissions.");
 			}
 		}
 
 	}
 
 	public boolean onCommand(CommandSender sender, Command cmd, String commandLabel, String[] args) {
-		String command = cmd.getName();
 		boolean canUseCommand = true;
 
 		HashMap<Integer, ? extends ItemStack> itemsarray = new HashMap<Integer, ItemStack>();
@@ -134,7 +146,7 @@ public class GiftSend extends JavaPlugin{
 			}
 			
 
-			if ((command.equals("gift") || command.equals("send")) && canUseCommand) {
+			if (canUseCommand) {
 
 				if (args.length >= 3) {
 					String playername = args[0];
@@ -169,17 +181,23 @@ public class GiftSend extends JavaPlugin{
 					try {
 						givetypeid = Integer.parseInt(itemstring);
 					}
-					catch(NumberFormatException e) {
-						//if (durability != null)
-							//itemstring = itemstring+"_"+durability;
-
-						itemstring = itemstring.toUpperCase();
-
-						try {
-							givetypeid = Material.getMaterial(itemstring).getId();
+					catch (NumberFormatException e) {
+						if(OI !=null) { //get the OddItem name
+							try {
+								givetypeid = OI.getItemStack(itemstring).getTypeId();
+							}
+							catch (IllegalArgumentException ex) {
+								errormsg = "Did you mean : "+ex.getMessage()+" ?";
+							}
 						}
-						catch (NullPointerException n) {
-							errormsg = "The item '"+itemstring+"' does not exist.";
+						else { //get the ENUM name
+
+							try {
+								givetypeid = Material.getMaterial(itemstring.toUpperCase()).getId();
+							}
+							catch (NullPointerException n) {
+								errormsg = "The item '"+itemstring.toUpperCase()+"' does not exist.";
+							}
 						}
 					}
 
@@ -195,22 +213,11 @@ public class GiftSend extends JavaPlugin{
 						ItemStack value = entry.getValue();
 						
 
-//						//if it's wool
-//						if (value.getTypeId() == 35) {
-//							Wool wool = (Wool)value.getData();
-//							player.sendMessage(wool.getColor().toString());
-//							player.sendMessage(value.getDurability()+"");
-//						}
-						//if (durability != -1){
 
 							if (value.getDurability() == durability && value.getAmount() > 0){
 
 								playerHasInInventory = playerHasInInventory + value.getAmount(); 
 							}
-//						}
-//						else {
-//							playerHasInInventory = playerHasInInventory + value.getAmount(); 
-//						}
 						
 					}
 
@@ -227,7 +234,7 @@ public class GiftSend extends JavaPlugin{
 							int z2 = testplayer.getLocation().getBlockZ();
 
 							totaldistance = ((x1 - x2)^2 + (y1 - y2)^2 +(z1 - z2)^2);
-							if (!(totaldistance < (maxradius^2))) {
+							if (totaldistance >= (maxradius^2)) {
 								errormsg = "That player too far away.";
 							}
 						}
@@ -266,44 +273,11 @@ public class GiftSend extends JavaPlugin{
 							}
 							
 						}
-						//ItemStack itemstack = player.getInventory().getItem(player.getInventory().first(new ItemStack(givetypeid, giveamount)));
 
 						//player is not online, store in offline.txt
 						if (testplayer == null || !testplayer.isOnline()) {
-
-							File offlineFile = new File(getDataFolder()+"/offline.txt");
-							//Write the send to file
-							try {
-
-								BufferedWriter out = new BufferedWriter(new FileWriter(offlineFile, true));
-
-								String textToWrite = playername+":"+givetypeid+":"+giveamount+":"+player.getName()+":"+durability;
-
-								out.write(textToWrite);
-								out.newLine();
-
-								//Close the output stream
-								out.close();
-
-
-								materialname = Material.getMaterial(givetypeid).toString().toLowerCase().replace("_", " ");
-								if (giveamount > 1) {
-									if (materialname.endsWith("s") || materialname.endsWith("z"))
-										materialname = materialname+"es";
-									else
-										materialname = materialname+"s";
-								}
-
-
-
-								player.sendMessage(ChatColor.GRAY+"You gave "+ChatColor.GREEN+playername+" "+ChatColor.GRAY+itemamount+" "+ ChatColor.RED+materialname);
-								player.sendMessage(ChatColor.GRAY+"They will receive it when they log in.");
-
-
-							}
-							catch (Exception e) {
-								log.info("[GiftSend] Offline transfer to "+playername+" failed: " + e);
-							}
+							writeOffline(player, testplayer.getName(), givetypeid, durability, giveamount, false);
+							
 
 						}
 
@@ -313,8 +287,17 @@ public class GiftSend extends JavaPlugin{
 							if (testplayer.getInventory().firstEmpty() >= 0) {
 
 								//remove the item
-								testplayer.getInventory().addItem(new ItemStack(givetypeid, giveamount, durability));
-								//currentinventory.removeItem(new ItemStack(ID,AMOUNT));
+								int tmpamount = giveamount;
+								int stack_size = Material.getMaterial(givetypeid).getMaxStackSize();
+								if(givetypeid == 357) 
+									stack_size = 8;
+								while(tmpamount > 0) {
+									if(testplayer.getInventory().firstEmpty() == -1)
+										break;
+									testplayer.getInventory().addItem(new ItemStack(givetypeid, Math.min(tmpamount, stack_size), durability));
+									tmpamount -= Math.min(tmpamount, stack_size);
+								}
+								
 								materialname = Material.getMaterial(givetypeid).toString().toLowerCase().replace("_", " ");
 								if (giveamount > 1) {
 									if (materialname.endsWith("s") || materialname.endsWith("z"))
@@ -325,6 +308,11 @@ public class GiftSend extends JavaPlugin{
 
 								player.sendMessage(ChatColor.GRAY+"You gave "+ChatColor.GREEN+testplayer.getName()+" "+ChatColor.GRAY+itemamount+" "+ ChatColor.RED+materialname);
 								testplayer.sendMessage(ChatColor.GREEN+player.getName()+ChatColor.GRAY+" gave you "+itemamount+" "+ChatColor.RED+materialname);
+								if(tmpamount > 0) {
+									writeOffline(player, testplayer.getName(), givetypeid, durability, tmpamount, false);
+									player.sendMessage(ChatColor.GREEN+testplayer.getName()+"'s "+ChatColor.GRAY+" inventory is full. Only part of the items were sent.");
+									testplayer.sendMessage(ChatColor.GREEN+player.getName()+ChatColor.GRAY+" tried to send you something, but you have no space left. Try to reconnect with some space.");
+								}
 							}
 							else {
 								player.sendMessage(ChatColor.GREEN+testplayer.getName()+"'s "+ChatColor.GRAY+" inventory is full. Try again later.");
@@ -337,7 +325,7 @@ public class GiftSend extends JavaPlugin{
 					return false;
 				}
 			}
-			else if (command.equals("gift") || command.equals("send")) {
+			else {
 				sender.sendMessage("You don't have Permissions to do that");
 			}
 		}
@@ -345,5 +333,44 @@ public class GiftSend extends JavaPlugin{
 			sender.sendMessage("This is a player only command.");
 		}
 		return true;
+	}
+	static void writeOffline(Player sender, String recipient, int givetypeid, short durability, int giveamount, boolean listener) {
+		File offlineFile = new File(dataFolder+"/offline.txt");
+		//Write the send to file
+		try {
+
+			BufferedWriter out = new BufferedWriter(new FileWriter(offlineFile, true));
+
+			String textToWrite = recipient+":"+givetypeid+":"+giveamount+":"+sender.getName()+":"+durability;
+
+			out.write(textToWrite);
+			out.newLine();
+
+			//Close the output stream
+			out.close();
+
+
+			String materialname = Material.getMaterial(givetypeid).toString().toLowerCase().replace("_", " ");
+			if (giveamount > 1) {
+				if (materialname.endsWith("s") || materialname.endsWith("z"))
+					materialname = materialname+"es";
+				else
+					materialname = materialname+"s";
+			}
+
+
+			if(!listener){
+				sender.sendMessage(ChatColor.GRAY+"You gave "+ChatColor.GREEN+recipient+" "+ChatColor.GRAY+giveamount+" "+ ChatColor.RED+materialname);
+				sender.sendMessage(ChatColor.GRAY+"They will receive it when they log in.");
+			}
+
+
+		}
+		catch (Exception e) {
+			log.info("[GiftSend] Offline transfer to "+recipient+" failed: " + e);
+		}
+	}
+	public static GiftSend getPlugin() {
+		return plugin;
 	}
 }

@@ -50,13 +50,28 @@ public class SGPlayerListener extends PlayerListener {
 						int giveamount = Integer.parseInt(splittext[2]);
 						short givedurability = Short.valueOf(splittext[4]);
 
-						event.getPlayer().getInventory().addItem(new ItemStack(givetypeid, giveamount, givedurability));
-						//currentinventory.removeItem(new ItemStack(ID,AMOUNT));
+						int tmpamount = giveamount;
+						int stack_size = Material.getMaterial(givetypeid).getMaxStackSize();
+						if(givetypeid == 357) 
+							stack_size = 8;
+						while(tmpamount > 0) {
+							if(event.getPlayer().getInventory().firstEmpty() == -1)
+								break;
+							event.getPlayer().getInventory().addItem(new ItemStack(givetypeid, Math.min(tmpamount, stack_size), givedurability));
+							tmpamount -= Math.min(tmpamount, stack_size);
+						}
+						if(tmpamount > 0){
+							GiftSend.writeOffline(event.getPlayer(), splittext[3], givetypeid, givedurability, tmpamount, true);
+
+						}
 						String materialname = Material.getMaterial(givetypeid).toString().toLowerCase().replace("_", " ");
 						if (giveamount > 1)
 							materialname = materialname+"s";
 
-						event.getPlayer().sendMessage(ChatColor.GREEN+splittext[3]+ChatColor.GRAY+" gave you "+giveamount+" "+ChatColor.RED+materialname);
+						if(tmpamount ==0)
+							event.getPlayer().sendMessage(ChatColor.GREEN+splittext[3]+ChatColor.GRAY+" gave you "+giveamount+" "+ChatColor.RED+materialname);
+						else
+							event.getPlayer().sendMessage(ChatColor.GREEN+splittext[3]+ChatColor.GRAY+" gave you "+(giveamount-tmpamount)+" "+ChatColor.RED+materialname+ChatColor.GRAY+" but "+ChatColor.RED+tmpamount+" more did not fit. Try to reconnect after emptying your inventory.");
 					}
 					else {
 						event.getPlayer().sendMessage(ChatColor.GRAY+"You have items sent to you, but your inventory is full.");

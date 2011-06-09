@@ -482,8 +482,11 @@ public class DispenserReFill extends JavaPlugin {
 		if(canByPassInventory) { //spawn the items
 			disp_inventory.clear();
 			if (fillid != 0) {
+				int stack_size = Material.getMaterial(fillid).getMaxStackSize();
+				if (fillid == 357)
+					stack_size = 8;
 				for(int k=0; k<container.getInventory().getSize(); k++) {
-					disp_inventory.addItem(new ItemStack(Material.getMaterial(fillid), Material.getMaterial(fillid).getMaxStackSize(), durability));
+					disp_inventory.addItem(new ItemStack(Material.getMaterial(fillid), stack_size, durability));
 				}
 			}
 		}
@@ -588,6 +591,8 @@ public class DispenserReFill extends JavaPlugin {
 			}
 			while( amount_left>0) { //if there are still items left, drop them 
 				int max_size = Math.min(amount_left, Material.getMaterial(fillid).getMaxStackSize());
+				if(fillid == 357)
+					max_size = Math.min(amount_left, 8);
 				world.dropItemNaturally(location, new ItemStack(fillid, max_size, durability)); 
 			}
 
@@ -688,6 +693,8 @@ public class DispenserReFill extends JavaPlugin {
 
 			for(int k = 0; k<inventory.getSize(); k++) {
 				int stack_size = Math.min(Material.getMaterial(fillid).getMaxStackSize(), amount);
+				if(fillid == 357)
+					stack_size = Math.min(amount, 8);
 				inventory.addItem(new ItemStack(fillid, stack_size, durability));
 				amount -= stack_size;
 				if(amount <= 0)
