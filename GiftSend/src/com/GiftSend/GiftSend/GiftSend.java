@@ -148,14 +148,17 @@ public class GiftSend extends JavaPlugin{
 
 			if (canUseCommand) {
 
-				if (args.length >= 3) {
+				if (args.length > 1) {
 					String playername = args[0];
 					String itemamount = args[1];
-					String itemstring = args[2];
 					String tmpdurability = null;
-					if (args.length > 3) {
+					String itemstring = null;
+					if(args.length>2)
+						itemstring = args[2];
+
+					if (args.length > 3) 
 						tmpdurability = args[3];
-					}
+					
 
 					String errormsg = "";
 					int giveamount = 0;
@@ -178,6 +181,9 @@ public class GiftSend extends JavaPlugin{
 						}
 					}
 					//checks to see if the item works
+					if(itemstring != null){
+						itemstring = Integer.toString(player.getItemInHand().getTypeId());
+					}
 					try {
 						givetypeid = Integer.parseInt(itemstring);
 					}
