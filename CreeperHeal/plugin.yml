@@ -1,0 +1,5 @@
+name: CreeperHeal
+main: com.nitnelave.CreeperHeal.CreeperHeal
+version: 0.1
+author: nitnelave
+description: Replaces terrain destroyed by creeper explosions
