@@ -181,8 +181,14 @@ public class GiftSend extends JavaPlugin{
 						}
 					}
 					//checks to see if the item works
-					if(itemstring != null){
-						itemstring = Integer.toString(player.getItemInHand().getTypeId());
+					if(itemstring == null){
+						if(player.getItemInHand().getTypeId() != 0){
+							itemstring = Integer.toString(player.getItemInHand().getTypeId());
+						}
+						else {
+							player.sendMessage("Hold an item in your hand, or use this syntax :");
+							return false;
+						}
 					}
 					try {
 						givetypeid = Integer.parseInt(itemstring);
@@ -281,8 +287,8 @@ public class GiftSend extends JavaPlugin{
 						}
 
 						//player is not online, store in offline.txt
-						if (testplayer == null || !testplayer.isOnline()) {
-							writeOffline(player, testplayer.getName(), givetypeid, durability, giveamount, false);
+						if (testplayer == null || !testplayer.isOnline()) {	
+							writeOffline(player, playername, givetypeid, durability, giveamount, false);
 							
 
 						}
