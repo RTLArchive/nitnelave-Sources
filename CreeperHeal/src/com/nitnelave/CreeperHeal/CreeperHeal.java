@@ -5,6 +5,7 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -38,6 +39,10 @@ public class CreeperHeal extends JavaPlugin {
 	HashMap<Location, String[]> sign_text = new HashMap<Location, String[]>();
 	boolean creeper = true;
 	boolean tnt = false;
+	private ArrayList<Integer> whitelist_natural;
+	private ArrayList<Integer> blacklist_natural;
+	String natural_only;
+
 
 	public void onEnable() {
 		log = Logger.getLogger("Minecraft");
@@ -70,6 +75,13 @@ public class CreeperHeal extends JavaPlugin {
 				out.write("TNT: false    #replaces TNT damage");
 				out.newLine();
 				out.write("Creepers: true    #replaces Creeper damage");
+				out.newLine();
+				out.write("replace-natural-only: false    #replace only natural blocks. Can be false, whitelist or blacklist");
+				out.newLine();
+				out.write("natural-blocks-whitelist: 1,2,3,9,11,12,13,14,15,16,17,18,21,24,31,32,37,38,39,40," +
+						"48,49,56,73,79,81,82,86,87,88,89    #Blocks that will get replaced if replace-natural-only is set to whitelist");
+				out.newLine();
+				out.write("natural-blocks-blacklist:         #Blocks that will not get replaced if replace-natural-only is set to blacklist");
 
 				//Close the output stream
 				out.close();
@@ -81,7 +93,7 @@ public class CreeperHeal extends JavaPlugin {
 
 		listener = new CreeperListener(this);
 		PluginManager pm = getServer().getPluginManager();
-		pm.registerEvent(Event.Type.ENTITY_EXPLODE, listener, Event.Priority.Normal, this);
+		pm.registerEvent(Event.Type.ENTITY_EXPLODE, listener, Event.Priority.Monitor, this);
 
 		PluginDescriptionFile pdfFile = this.getDescription();
 
@@ -123,7 +135,48 @@ public class CreeperHeal extends JavaPlugin {
 		catch (Exception e) {
 			log.warning("[CreeperHeal] Wrong values for TNT field. Defaulting to false.");
 		}
+		
+		try{
+			natural_only = getConfiguration().getString("replace-natural-only", "false").trim();
+		}
+		catch (Exception e) {
+			log.warning("[CreeperHeal] Wrong values for replace-natural-only field. Defaulting to false.");
+			log_info(e.getLocalizedMessage(), 1);
+		}
+		if(!natural_only.equalsIgnoreCase("false") && !natural_only.equalsIgnoreCase("whitelist") && !natural_only.equalsIgnoreCase("blacklist"))
+			log.warning("[CreeperHeal] Wrong values for replace-natural-only field. Defaulting to false.");
 
+		whitelist_natural  = new ArrayList<Integer>();
+		try{
+			String tmp_str = getConfiguration().getString("natural-blocks-whitelist", "").trim();
+			if(tmp_str.split(",")!=null){
+				for(String elem : tmp_str.split(",")) {
+					whitelist_natural.add(Integer.parseInt(elem));
+				}
+			}
+			else
+				log_info("[CreeperHeal] Empty white-list", 1);
+		}
+		catch (Exception e) {
+			log.warning("[CreeperHeal] Wrong values for natural-blocks-whitelist field.");
+		}
+		
+		blacklist_natural = new ArrayList<Integer>();
+		try{
+			String tmp_str = getConfiguration().getString("natural-blocks-blacklist", "").trim();
+			if(tmp_str.split(",")!=null){
+				for(String elem : tmp_str.split(",")) {
+					blacklist_natural.add(Integer.parseInt(elem));
+				}
+			}
+			else
+				log_info("[CreeperHeal] Empty black-list", 1);
+		}
+		catch (Exception e) {
+			log.warning("[CreeperHeal] Wrong values for natural-blocks-blacklist field.");
+		}
+		
+		
 		if( getServer().getScheduler().scheduleAsyncRepeatingTask(this, new Runnable() {
 			public void run() {
 				check_replace();
@@ -166,52 +219,7 @@ public class CreeperHeal extends JavaPlugin {
 					log.warning("null map key?");
 				}
 				else {
-					for(BlockState block : map.get(time)){
-						if (block.getTypeId() == 12 || block.getTypeId() == 13) {
-							int k = 1;
-							while(block.getY() + k < 128 && block.getWorld().getBlockAt(block.getX(), block.getY() + k, block.getZ()).getTypeId() != 0) {
-								k++;
-								block.getBlock().setTypeId(block.getTypeId());
-							}
-						}
-
-						if(block.getType() != Material.WOODEN_DOOR && block.getType() != Material.IRON_DOOR_BLOCK && block.getType() != Material.BED_BLOCK) {
-							block.getBlock().setTypeIdAndData(block.getTypeId(), block.getRawData(), true);
-						}
-						else if ((block.getType() == Material.WOODEN_DOOR || block.getType() == Material.IRON_DOOR_BLOCK) && block.getRawData() < 8) {
-							block.getBlock().setTypeIdAndData(block.getTypeId(), block.getRawData(), false);
-							block.getBlock().getFace(BlockFace.UP).setTypeIdAndData(block.getTypeId(), (byte)(block.getRawData() + 8), false);
-						}
-						else if(block.getType() == Material.BED_BLOCK && block.getRawData() < 8) {
-							byte data = block.getRawData();
-							block.getBlock().setTypeIdAndData(26, data, false);
-							BlockFace face = null;
-							if(data == 0)
-								face = BlockFace.WEST;
-							else if(data == 1)
-								face = BlockFace.NORTH;
-							else if(data == 2)
-								face = BlockFace.EAST;
-							else
-								face = BlockFace.SOUTH;
-							block.getBlock().getFace(face).setTypeIdAndData(26, (byte)(block.getRawData() + 8), false);
-						}
-						if(block instanceof ContainerBlock) {
-							((ContainerBlock) block.getBlock().getState()).getInventory().setContents(chest_contents.get(new Location(block.getWorld(), block.getX(), block.getY(), block.getZ())));
-							block.update();
-							chest_contents.remove(new Location(block.getWorld(), block.getX(), block.getY(), block.getZ()));
-						}
-						if(block instanceof Sign) {
-							int k = 0;
-							for(String line : sign_text.get(new Location(block.getWorld(), block.getX(), block.getY(), block.getZ()))) {
-								((Sign) block.getBlock().getState()).setLine(k, line);
-								k++;
-							}
-							sign_text.remove(new Location(block.getWorld(), block.getX(), block.getY(), block.getZ()));
-						}
-
-
-					}
+					replace_blocks(map.get(time));
 					iterator.remove();
 					log_info("Blocks replaced!", 1);
 				}
@@ -219,6 +227,102 @@ public class CreeperHeal extends JavaPlugin {
 
 			}
 		}
+	}
+	
+	private void replace_blocks(List<BlockState> list) {
+		while(!list.isEmpty()){
+			Iterator<BlockState> iter = list.iterator();
+			while (iter.hasNext()){
+				BlockState block = iter.next();
+				if(block.getTypeId() != 12 && block.getTypeId() != 50){
+					block_state_replace(block);
+					iter.remove();
+				}
+			}
+			iter = list.iterator();
+			while (iter.hasNext()){
+				BlockState block = iter.next();
+				if(block.getTypeId() == 12 && block.getTypeId() != 50){
+					block_state_replace(block);
+					iter.remove();
+				}
+			}
+			iter = list.iterator();
+			while (iter.hasNext()){
+				BlockState block = iter.next();
+				if(block.getTypeId() != 12 && block.getTypeId() == 50){
+					log_info("torch data : "+block.getRawData(),2);
+					block_state_replace(block);
+					iter.remove();
+				}
+			}
+		}
+		
+	}
+	public void block_state_replace(BlockState block){
+		if ((block.getType() == Material.WOODEN_DOOR || block.getType() == Material.IRON_DOOR_BLOCK) && block.getRawData() < 8) {
+			block_replace(block.getBlock(), block.getTypeId(), block.getRawData());
+			block_replace(block.getBlock().getFace(BlockFace.UP), block.getTypeId(), (byte)(block.getRawData() + 8));
+		}
+		else if(block.getType() == Material.BED_BLOCK && block.getRawData() < 8) {
+			byte data = block.getRawData();
+			block.getBlock().setTypeIdAndData(block.getTypeId(), data, false);
+			BlockFace face = null;
+			if(data == 0)
+				face = BlockFace.WEST;
+			else if(data == 1)
+				face = BlockFace.NORTH;
+			else if(data == 2)
+				face = BlockFace.EAST;
+			else
+				face = BlockFace.SOUTH;
+			block_replace(block.getBlock().getFace(face), block.getTypeId(), (byte)(block.getRawData() + 8));
+		}
+		else if(block.getType() != Material.BED_BLOCK && block.getType() != Material.WOODEN_DOOR && block.getType() != Material.IRON_DOOR){
+			block_replace(block.getBlock(), block.getTypeId(), block.getRawData());
+		}
+		
+	}
+	
+	public void block_replace(Block block, int type_id, byte rawData) {
+		int block_id = block.getTypeId();
+		if(type_id == 50){
+			log_info("placing torch : "+rawData, 2);
+			rawData = (byte)2;
+		}
+		
+		if(!Arrays.asList(0, 8, 9, 10, 11, 12, 13, 18, 51, 78, 79).contains(block_id)) {
+			block.getWorld().dropItemNaturally(block.getLocation(), new ItemStack(block_id, 1, block.getData()));
+		}
+		else if(block_id == 12 || block_id == 13 || block_id == 88) {
+			log_info("sand!", 2);
+			for(int k = 1; block.getY() + k < 128; k++) {
+				if(block.getRelative(0, k, 0).getTypeId() == 0) {
+					block.getRelative(0, k, 0).setTypeIdAndData(block_id, (byte)0, false);
+					break;
+				}
+			}
+		}
+		if((natural_only.equalsIgnoreCase("whitelist") && whitelist_natural.contains(type_id) 
+				|| (natural_only.equalsIgnoreCase("blacklist") && !blacklist_natural.contains(type_id) 
+						|| natural_only.equalsIgnoreCase("false")))){
+			block.setTypeIdAndData(type_id, rawData, false);
+			
+			if(block instanceof ContainerBlock) {
+				((ContainerBlock) block.getState()).getInventory().setContents(chest_contents.get(new Location(block.getWorld(), block.getX(), block.getY(), block.getZ())));
+				block.getState().update();
+				chest_contents.remove(new Location(block.getWorld(), block.getX(), block.getY(), block.getZ()));
+			}
+			if(block instanceof Sign) {
+				int k = 0;
+				for(String line : sign_text.get(new Location(block.getWorld(), block.getX(), block.getY(), block.getZ()))) {
+					((Sign) block.getState()).setLine(k, line);
+					k++;
+				}
+				sign_text.remove(new Location(block.getWorld(), block.getX(), block.getY(), block.getZ()));
+			}
+		}
+		
 	}
 
 	public void log_info(String msg, int min_level) {

@@ -20,16 +20,16 @@ public class CreeperListener extends EntityListener{
 	}
 	
 	public void onEntityExplode(EntityExplodeEvent event) {
-		if(event.getEntity()!=null) {
+		if(event.getEntity()!=null && !event.isCancelled()) {
 			if( event.getEntity() instanceof Creeper && plugin.creeper) {
 				plugin.recordBlocks(event);
-				event.blockList().clear();
 			}
 			else if(event.getEntity() instanceof TNTPrimed && plugin.tnt) {
 				plugin.recordBlocks(event);
-				event.blockList().clear();
 			}
 		}
+		plugin.log.info(Float.toString(event.getYield()));
+		event.setYield(0);
 	}
 	
 }
