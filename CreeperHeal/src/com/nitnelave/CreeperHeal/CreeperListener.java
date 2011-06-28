@@ -28,7 +28,6 @@ public class CreeperListener extends EntityListener{
 				plugin.recordBlocks(event);
 			}
 		}
-		plugin.log.info(Float.toString(event.getYield()));
 		event.setYield(0);
 	}
 	
