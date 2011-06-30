@@ -15,6 +15,7 @@ import java.util.Date;
 
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.block.BlockState;
@@ -26,6 +27,9 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.Event;
 import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.material.Attachable;
+import org.bukkit.material.MaterialData;
+import org.bukkit.material.SimpleAttachableMaterialData;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.PluginDescriptionFile;
 import org.bukkit.plugin.PluginManager;
@@ -51,9 +55,12 @@ public class CreeperHeal extends JavaPlugin {
 	private ArrayList<Integer> blocks_no_drop = new ArrayList<Integer>(Arrays.asList(0, 8, 9, 10, 11, 12, 13, 18, 51, 78, 79));
 	private ArrayList<Integer> blocks_physics = new ArrayList<Integer>(Arrays.asList(12,13,88));
 	private ArrayList<Integer> blocks_last = new ArrayList<Integer>(Arrays.asList(6,26,27,28,31,32,37,38,39,40,50,55,59,63,64,65,66,68,69,70,71,72,75,76,77,81,83,93,94,96));
+	private ArrayList<Integer> blocks_non_solid = new ArrayList<Integer>(Arrays.asList(0,6,8,9,26,27,28,30,31,37,38,39,40, 50,55,59,63,64,65,66,68,69,70,71,72,75,76,77,78,83,90,93,94,96));
 	boolean drop_blocks_replaced = true;
 	public static PermissionHandler Permissions = null;
 	int period = 20;
+	int block_interval = 5;
+	boolean block_per_block = false;
 
 	
 	String natural_only;
@@ -88,13 +95,25 @@ public class CreeperHeal extends JavaPlugin {
 			period = 20;
 		}
 		
+		try {
+			block_interval = getConfiguration().getInt("block-interval", 5);
+		}
+		catch (Exception e) {
+			log.warning("[CreeperHeal] Wrong value for block-interval field. Defaulting to 5 ticks");
+			block_interval = 5;
+		}
+		
 		loadConfig();
 		
+		int tmp_period = period * 20;
+		if(block_per_block)
+			tmp_period = block_interval;
 		if( getServer().getScheduler().scheduleAsyncRepeatingTask(this, new Runnable() {
 			public void run() {
-				check_replace();
-			}}, 200, period * 20) == -1)
+				check_replace(block_per_block);
+			}}, 200, tmp_period) == -1)
 			log.warning("[CreeperHeal] Impossible to schedule the re-filling task. Auto-refill will not work");
+		
 
 		log.info("[CreeperHeal] version "+pdfFile.getVersion()+" by nitnelave is enabled");
 	}
@@ -226,32 +245,101 @@ public class CreeperHeal extends JavaPlugin {
 			if(blocks_last.contains(block.getRelative(BlockFace.UP).getTypeId()))
 				block.getRelative(BlockFace.UP).setTypeIdAndData(0, (byte)0, false);
 		}
+		BlockState[] tmp_array = (list_state.toArray(new BlockState[list_state.size()]));
+		Arrays.sort(tmp_array, new CreeperComparator());
+		list_state.clear();
+		for(BlockState bst : tmp_array){
+			list_state.add(bst);
+		}
 		map.put(new Date(), list_state);
 		log_info("EXPLOSION!", 2);
 
 	}
-	public void check_replace() {
+	public void check_replace(boolean block_per_block) {
 		Date now = new Date();
 
 		log_info("Replacing blocks...", 2);
 		Iterator<Date> iterator = map.keySet().iterator();
 		while(iterator.hasNext()) {
 			Date time = iterator.next();
-			if(new Date(time.getTime() + interval.getTime()).before(now)) {
-				if(map.get(time) == null) {
-					log.warning("null map key?");
-				}
-				else {
+			if(!block_per_block){
+				if(new Date(time.getTime() + interval.getTime()).before(now)) {
 					replace_blocks(map.get(time));
 					iterator.remove();
 					log_info("Blocks replaced!", 1);
+						
+					Player[] player_list = getServer().getOnlinePlayers();
+					for(Player player : player_list) {
+						log_info("checking player "+player.getName(),2);
+						double x = player.getLocation().getX();
+						double y = player.getLocation().getY();
+						double z = player.getLocation().getZ();
+						World w = player.getWorld();
+						if(!blocks_non_solid.contains(w.getBlockAt(player.getLocation())) && !blocks_non_solid.contains(w.getBlockAt(new Location(w, x, y + 1, z)))) {
+							log_info("player suffocating",2);
+							for(int k =1; k + y < 127; k++) {
+								if(check_free(w, x+k, y, z)){
+									player.teleport(new Location(player.getWorld(), x+k, y, z));
+									break;
+								}
+								if(check_free(w, x-k, y, z)){
+									player.teleport(new Location(player.getWorld(), x-k, y, z));
+									break;
+								}
+								if(check_free(w, x, y+k, z)){
+									player.teleport(new Location(player.getWorld(), x, y+k, z));
+									break;
+								}
+								if(check_free(w, x, y, z+k)){
+									player.teleport(new Location(player.getWorld(), x, y, z+k));
+									break;
+								}
+								if(check_free(w, x, y, z-k)){
+									player.teleport(new Location(player.getWorld(), x, y, z-k));
+									break;
+								}
+							}
+						}
+
+						
+					}
+
+
 				}
-
-
 			}
+			else {
+				replace_one_block(map.get(time));
+				if(map.get(time).isEmpty())
+					map.remove(time);
+				log_info("blocks replaced!", 2);
+			}
+			
 		}
 	}
 	
+	private boolean check_free(World w, double x, double y, double z) {
+		if(blocks_non_solid.contains(w.getBlockAt(new Location(w, x, y, z)).getTypeId()) && blocks_non_solid.contains(w.getBlockAt(new Location(w, x, y + 1, z)).getTypeId()) && !blocks_non_solid.contains(w.getBlockAt(new Location(w, x, y-1, z)).getTypeId())) {
+			return true;
+		}
+		
+		return false;
+	}
+	
+	private void replace_one_block(List<BlockState> list) {
+		
+		if((new MaterialData(list.get(0).getTypeId())) instanceof Attachable) {
+			log_info("hey!",0);
+			Block getfaced = list.get(0).getBlock().getFace(((SimpleAttachableMaterialData)(list.get(0).getData())).getFacing());
+			if(getfaced.getTypeId() == 0) {
+				getfaced.setTypeId(3);   //dirt, will get overwritten
+				//place the block that supports the torch or whatever
+			}
+		}
+		replace_blocks(list.get(0));
+		list.remove(0);
+	}
+
+
 	public void force_replace(long since) {
 		Date now = new Date();
 
@@ -303,6 +391,12 @@ public class CreeperHeal extends JavaPlugin {
 		}
 		
 	}
+	
+	private void replace_blocks(BlockState block) {
+		block_state_replace(block);
+		
+		
+	}
 	public void block_state_replace(BlockState block){
 		if ((block.getType() == Material.WOODEN_DOOR || block.getType() == Material.IRON_DOOR_BLOCK) && block.getRawData() < 8) {
 			block_replace(block.getBlock(), block.getTypeId(), block.getRawData());
@@ -328,6 +422,7 @@ public class CreeperHeal extends JavaPlugin {
 		
 	}
 	
+	@SuppressWarnings("unused")
 	public void block_replace(Block block, int type_id, byte rawData) {
 		int block_id = block.getTypeId();
 		
@@ -336,17 +431,35 @@ public class CreeperHeal extends JavaPlugin {
 		}
 		else if(blocks_physics.contains(block_id)) {
 			//log_info("sand!", 2);
-			for(int k = 1; block.getY() + k < 128; k++) {
-				if(block.getRelative(0, k, 0).getTypeId() == 0) {
-					block.getRelative(0, k, 0).setTypeIdAndData(block_id, (byte)0, false);
-					break;
+			for(int k = 1; block.getY() + k < 127; k++) {
+				if(block.getRelative(0,k,0) != null) {
+
+					if(block.getRelative(0, k, 0).getTypeId() == 0) {
+						try{
+							block.getRelative(0, k, 0).setTypeIdAndData(block_id, (byte)0, false);
+						}
+						catch (NullPointerException e) {
+							if(block.getRelative(0, k, 0) == null)
+								log_info("block.getRelative(0,"+k+", 0) is null??",0);
+							log.warning(e.getLocalizedMessage());
+						}
+						break;
+					}
 				}
+				else
+					log.warning("block.getRelative(0,"+k+", 0) is null?? Y: "+(block.getY()+k));
 			}
 		}
 		if((natural_only.equalsIgnoreCase("whitelist") && whitelist_natural.contains(type_id) 
 				|| (natural_only.equalsIgnoreCase("blacklist") && !blacklist_natural.contains(type_id) 
 						|| natural_only.equalsIgnoreCase("false")))){
-			block.setTypeIdAndData(type_id, rawData, false);
+			try{
+				block.setTypeIdAndData(type_id, rawData, false);
+			}
+			catch(NullPointerException e) {
+				if(block == null)
+					log.warning("block null on secon setType??");
+			}
 			
 			if(block.getState() instanceof ContainerBlock) {
 				((ContainerBlock) block.getState()).getInventory().setContents(chest_contents.get(new Location(block.getWorld(), block.getX(), block.getY(), block.getZ())));
@@ -449,6 +562,13 @@ public class CreeperHeal extends JavaPlugin {
 		catch (Exception e) {
 			log.warning("[CreeperHeal] Wrong values for drop-replaced-blocks field. Defaulting to true.");
 		}
+		
+		try{
+			block_per_block = getConfiguration().getBoolean("block-per-block", true);
+		}
+		catch (Exception e) {
+			log.warning("[CreeperHeal] Wrong values for block-per-block field. Defaulting to true.");
+		}
 	}
 	
 	public void setup_permissions() {
@@ -493,6 +613,10 @@ public class CreeperHeal extends JavaPlugin {
 			out.write("natural-blocks-blacklist: "+blacklist_natural.toString().substring(1, blacklist_natural.toString().length()-1)+"        #Blocks that will not get replaced if replace-natural-only is set to blacklist");
 			out.newLine();
 			out.write("drop-replaced-blocks: "+Boolean.toString(drop_blocks_replaced)+"      #gives back a drop when you place a block in an area to be healed");
+			out.newLine();
+			out.write("block-per-block: "+Boolean.toString(block_per_block)+"        #Replaces one block at a time, give the block-interval, or the whole explosion after the interval");
+			out.newLine();
+			out.write("block-interval: "+block_interval+"     #in ticks, 1/20th of a second");
 
 			//Close the output stream
 			out.close();
