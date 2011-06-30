@@ -1,31 +1,12 @@
 name: CreeperHeal
 main: com.nitnelave.CreeperHeal.CreeperHeal
-version: 1.1
+version: 1.2
 author: nitnelave
 description: Replaces terrain destroyed by creeper explosions
 
 commands:
-    CHreload:
-        description: Reloads the config
-        usage: /<command>
+    CreeperHeal:
+        description: CreeperHeal commands
+        usage: /<command> [forceHeal|Creeper|TNT|dropReplaced]
         permissions: CreeperHeal.admin
-    CHcreeper:
-        description: Toggles Creeper explosions healing on/off
-        usage: /<command> (on/off)
-        permissions: CreeperHeal.admin
-    CHTNT:
-        description: Toggles TNT explosions healing on/off
-        usage: /<command> (on/off)
-        permissions: CreeperHeal.admin
-    CHdropReplaced:
-        description: Toggles blocks dropping items when replaced on/off
-        usage: /<command> (on/off)
-        permissions: CreeperHeal.admin
-    CHinterval:
-        description: Changes the interval before a crater is healed
-        usage: /<command> [interval in seconds]
-        permissions: CreeperHeal.admin
-    CHforceHeal:
-        description: instantly replaces the explosions since x seconds, or all if not specified.
-        usage: /<command> (x in seconds)
-        permissions: CreeperHeal.admin
+        aliases: ch
