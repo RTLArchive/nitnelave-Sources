@@ -41,8 +41,10 @@ import com.nijikokun.bukkit.Permissions.Permissions;
 public class CreeperHeal extends JavaPlugin {
 	Logger log;
 	HashMap<Date, List<BlockState>> map = new HashMap<Date, List<BlockState>>();
+	HashMap<Date, BlockState> map_burn = new HashMap<Date, BlockState>();
 	Date interval = new Date(60000);
-	private CreeperListener listener;
+	private CreeperListener listener = new CreeperListener(this);
+	private FireListener fire_listener = new FireListener(this);
 	private int log_level = 0;
 	HashMap<Location, ItemStack[]> chest_contents = new HashMap<Location, ItemStack[]>();
 	HashMap<Location, String[]> sign_text = new HashMap<Location, String[]>();
@@ -61,6 +63,8 @@ public class CreeperHeal extends JavaPlugin {
 	int block_interval = 5;
 	boolean block_per_block = false;
 	boolean teleport_on_suffocate = true;
+	int burn_interval = 45;
+	boolean replace_burn = true;
 
 
 	String natural_only;
@@ -79,9 +83,9 @@ public class CreeperHeal extends JavaPlugin {
 			config_write();
 		}
 
-		listener = new CreeperListener(this);
 		PluginManager pm = getServer().getPluginManager();
 		pm.registerEvent(Event.Type.ENTITY_EXPLODE, listener, Event.Priority.Monitor, this);
+		pm.registerEvent(Event.Type.BLOCK_BURN, fire_listener, Event.Priority.Monitor, this);
 
 		PluginDescriptionFile pdfFile = this.getDescription();
 		setup_permissions();
@@ -108,12 +112,23 @@ public class CreeperHeal extends JavaPlugin {
 		int tmp_period = period * 20;
 		if(block_per_block)
 			tmp_period = block_interval;
-		if( getServer().getScheduler().scheduleAsyncRepeatingTask(this, new Runnable() {
-			public void run() {
-				check_replace(block_per_block);
-			}}, 200, tmp_period) == -1)
-			log.warning("[CreeperHeal] Impossible to schedule the re-filling task. Auto-refill will not work");
-
+		if(tnt || creeper) {
+			if( getServer().getScheduler().scheduleAsyncRepeatingTask(this, new Runnable() {
+				public void run() {
+					check_replace(block_per_block);
+				}}, 200, tmp_period) == -1)
+				log.warning("[CreeperHeal] Impossible to schedule the re-filling task. Auto-refill will not work");
+		}
+		
+		
+		if(replace_burn) {
+			if( getServer().getScheduler().scheduleAsyncRepeatingTask(this, new Runnable() {
+				public void run() {
+					replace_burnt(false);
+				}}, 200, block_interval) == -1)
+				log.warning("[CreeperHeal] Impossible to schedule the replace-burnt task. Burnt blocks replacement will not work");
+		}
+		
 
 		log.info("[CreeperHeal] version "+pdfFile.getVersion()+" by nitnelave is enabled");
 	}
@@ -121,6 +136,7 @@ public class CreeperHeal extends JavaPlugin {
 
 	public void onDisable() {
 		force_replace(0);
+		replace_burnt(true);
 		log.info("[CreeperHeal] Disabled");
 	}
 
@@ -168,6 +184,20 @@ public class CreeperHeal extends JavaPlugin {
 					}
 					sender.sendMessage("TNT explosions replacement set to : "+Boolean.toString(tnt));
 				}
+				else if(cmd.equalsIgnoreCase("fire")){
+					if(args.length == 1)
+						replace_burn = !replace_burn;
+					else if(args[1].equalsIgnoreCase("on")) 
+						replace_burn = true;
+					else if(args[1].equalsIgnoreCase("off")) 
+						replace_burn = false;
+					else {
+						sender.sendMessage("/"+command.getName()+" TNT (on|off)");
+						sender.sendMessage("Toggles TNT's explosion replacement on/off");
+						return true;
+					}
+					sender.sendMessage("TNT explosions replacement set to : "+Boolean.toString(tnt));
+				}
 				else if(cmd.equalsIgnoreCase("dropReplaced")) {
 					if(args.length == 1)
 						drop_blocks_replaced = !drop_blocks_replaced;
@@ -193,13 +223,32 @@ public class CreeperHeal extends JavaPlugin {
 							sender.sendMessage("Sets the interval before healing an explosion, in the case of all blocks at once");
 							return true;
 						}
-						interval = new Date();
-						interval.setTime(interval_date*1000);
+						interval = new Date(interval_date*1000);
 						sender.sendMessage("New interval set to : "+interval_date);
 					}
 					else {
 						sender.sendMessage("/"+command.getName()+" interval [seconds]");
 						sender.sendMessage("Sets the interval before healing an explosion, in the case of all blocks at once");
+						return true;
+					}
+				}
+				else if(cmd.equalsIgnoreCase("burnInterval")) {
+					if(args.length == 2){
+						int interval_date = 0;
+						try {
+							interval_date = Integer.parseInt(args[1]);
+						}
+						catch (Exception e) {
+							sender.sendMessage("/"+command.getName()+" burnInterval [seconds]");
+							sender.sendMessage("Sets the interval before healing a block burnt");
+							return true;
+						}
+						burn_interval = interval_date;
+						sender.sendMessage("New interval set to : "+interval_date);
+					}
+					else {
+						sender.sendMessage("/"+command.getName()+" burn_interval [seconds]");
+						sender.sendMessage("Sets the interval before healing a block burnt");
 						return true;
 					}
 				}
@@ -226,7 +275,7 @@ public class CreeperHeal extends JavaPlugin {
 				}
 				else {
 					sender.sendMessage("CreeperHeal -- heals Creepers's damage");
-					sender.sendMessage("/ch [forceheal|Creeper|TNT|interval|dropReplaced]");
+					sender.sendMessage("/ch [forceheal|Creeper|TNT|interval|dropReplaced|fire|burnInterval]");
 					return true;
 				}
 
@@ -236,7 +285,7 @@ public class CreeperHeal extends JavaPlugin {
 			}
 			else {
 				sender.sendMessage("CreeperHeal -- heals Creepers's damage");
-				sender.sendMessage("/ch [forceheal|Creeper|TNT|interval|dropReplaced]");
+				sender.sendMessage("/ch [forceheal|Creeper|TNT|interval|dropReplaced|fire|burnInterval]");
 				return true;
 			}
 		}
@@ -522,7 +571,44 @@ public class CreeperHeal extends JavaPlugin {
 		}
 
 	}
+	
+	public void record_burn(Block block) {
+		Date now = new Date();
+		map_burn.put(now, block.getState());
+		if(blocks_last.contains(block.getFace(BlockFace.UP).getTypeId())) {
+			map_burn.put(new Date(now.getTime() + burn_interval*1000), block.getFace(BlockFace.UP).getState());
+			block.getFace(BlockFace.UP).setTypeIdAndData(0, (byte)0, false);
+		}
+	}
 
+	public void replace_burnt(boolean force) {
+		Iterator<Date> iter = map_burn.keySet().iterator();
+		Date now = new Date();
+		HashMap<Date, BlockState> to_add = new HashMap<Date, BlockState>();
+		while(iter.hasNext()) {
+			Date time = iter.next();
+			if((new Date(time.getTime() + burn_interval * 1000).before(now)) || force) {
+				BlockState block = map_burn.get(time);
+				if(blocks_last.contains(block.getTypeId())) {
+					if(blocks_non_solid.contains(block.getBlock().getFace(BlockFace.DOWN).getTypeId()) && !force) {
+						iter.remove();
+						to_add.put(new Date(time.getTime() + burn_interval*1000), block);
+					}
+					else {
+						replace_blocks(block);
+						iter.remove();
+					}
+				}
+				else {
+					replace_blocks(block);
+					iter.remove();
+				}
+			}
+		}
+		map_burn.putAll(to_add);
+	}
+	
+	
 	public void log_info(String msg, int min_level) {
 		if(min_level<=log_level)
 			log.info(msg);
@@ -544,7 +630,7 @@ public class CreeperHeal extends JavaPlugin {
 			log_level = getConfiguration().getInt("log-level", 0);
 		}
 		catch (Exception e) {
-			log.warning("[CreeperHeal] Wrong values for log field. Defaulting to 0.");
+			log.warning("[CreeperHeal] Wrong values for log-level field. Defaulting to 0.");
 		}
 
 		try {
@@ -619,6 +705,18 @@ public class CreeperHeal extends JavaPlugin {
 		catch (Exception e) {
 			log.warning("[CreeperHeal] Wrong values for teleport-on-suffocate field. Defaulting to true.");
 		}
+		try{
+			replace_burn = getConfiguration().getBoolean("replace-burnt-blocks", true);
+		}
+		catch (Exception e) {
+			log.warning("[CreeperHeal] Wrong values for replace-burnt-blocks field. Defaulting to true.");
+		}
+		try {
+			burn_interval = getConfiguration().getInt("burn-interval", 45);
+		}
+		catch (Exception e) {
+			log.warning("[CreeperHeal] Wrong values for burn-interval field. Defaulting to 45.");
+		}
 	}
 
 	public void setup_permissions() {
@@ -666,9 +764,13 @@ public class CreeperHeal extends JavaPlugin {
 			out.newLine();
 			out.write("block-per-block: "+Boolean.toString(block_per_block)+"        #Replaces one block at a time given the block-interval, or the whole explosion after the interval");
 			out.newLine();
-			out.write("block-interval: "+block_interval+"     #in ticks, 1/20th of a second");
+			out.write("block-interval: "+block_interval+"     #in ticks, 1/20th of a second, rate of replacement for explosions. Also frequency of check for fire block replacement");
 			out.newLine();
 			out.write("teleport-on-suffocate: "+Boolean.toString(teleport_on_suffocate)+"     #Teleport players out of explosions being healed if they suffocate (not for block_per_block)");
+			out.newLine();
+			out.write("replace-burnt-blocks: "+Boolean.toString(replace_burn)+"       #If true, replaces the blocks burnt after burnt_interval");
+			out.newLine();
+			out.write("burn-interval: "+burn_interval+"        #in seconds, how long you have to wait before the blocks burnt are replaced");
 
 			//Close the output stream
 			out.close();
