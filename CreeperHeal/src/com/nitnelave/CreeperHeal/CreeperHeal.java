@@ -575,9 +575,13 @@ public class CreeperHeal extends JavaPlugin {
 	public void record_burn(Block block) {
 		Date now = new Date();
 		map_burn.put(now, block.getState());
-		if(blocks_last.contains(block.getFace(BlockFace.UP).getTypeId())) {
-			map_burn.put(new Date(now.getTime() + burn_interval*1000), block.getFace(BlockFace.UP).getState());
-			block.getFace(BlockFace.UP).setTypeIdAndData(0, (byte)0, false);
+		BlockState block_up = block.getFace(BlockFace.UP).getState();
+		if(blocks_last.contains(block_up.getTypeId())) {
+			map_burn.put(new Date(now.getTime() + burn_interval*1000), block_up);
+			if(block_up instanceof Sign) {
+				sign_text.put(new Location(block_up.getWorld(), block_up.getX(), block_up.getY(), block_up.getZ()), ((Sign)block_up).getLines());
+			}
+			block_up.getBlock().setTypeIdAndData(0, (byte)0, false);
 		}
 	}
 
