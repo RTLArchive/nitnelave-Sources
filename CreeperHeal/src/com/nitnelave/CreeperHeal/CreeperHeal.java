@@ -193,10 +193,10 @@ public class CreeperHeal extends JavaPlugin {
 						replace_burn = false;
 					else {
 						sender.sendMessage("/"+command.getName()+" TNT (on|off)");
-						sender.sendMessage("Toggles TNT's explosion replacement on/off");
+						sender.sendMessage("Toggles burnt blocks replacement on/off");
 						return true;
 					}
-					sender.sendMessage("TNT explosions replacement set to : "+Boolean.toString(tnt));
+					sender.sendMessage("Burnt blocks replacement set to : "+Boolean.toString(tnt));
 				}
 				else if(cmd.equalsIgnoreCase("dropReplaced")) {
 					if(args.length == 1)
