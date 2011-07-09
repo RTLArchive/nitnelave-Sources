@@ -17,7 +17,7 @@ public class FireListener extends BlockListener{
 
 	}
 	
-	public void onBlockBurn(BlockBurnEvent event) {
+	public void onBlockBurn(BlockBurnEvent event) {		//no need to check for the setting, the listener only gets declared if it is set to true
 		plugin.record_burn(event.getBlock());
 	}
 	

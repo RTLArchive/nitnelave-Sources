@@ -1,12 +1,12 @@
 name: CreeperHeal
 main: com.nitnelave.CreeperHeal.CreeperHeal
-version: 1.3
+version: 2.0
 author: nitnelave
 description: Replaces terrain destroyed by creeper explosions
 
 commands:
     CreeperHeal:
         description: CreeperHeal commands
-        usage: /<command> [forceHeal|Creeper|TNT|dropReplaced|fire|burnInterval]
+        usage: /<command> [forceHeal|Creeper|TNT|dropReplaced|fire|burnInterval|ghast|magical]
         permissions: CreeperHeal.admin
         aliases: ch
