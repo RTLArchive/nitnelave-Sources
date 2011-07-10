@@ -54,7 +54,7 @@ public class CreeperHeal extends JavaPlugin {
 	private ArrayList<Integer> blacklist_natural = new ArrayList<Integer>(Arrays.asList(0));														//same for blacklist
 	private ArrayList<Integer> blocks_no_drop = new ArrayList<Integer>(Arrays.asList(0, 8, 9, 10, 11, 12, 13, 18, 51, 78, 79, 88));					//blocks that don't drop anything
 	private ArrayList<Integer> blocks_physics = new ArrayList<Integer>(Arrays.asList(12,13,88));						//sand gravel, soulsand fall
-	private ArrayList<Integer> blocks_last = new ArrayList<Integer>(Arrays.asList(6,26,27,28,31,32,37,38,39,40,50,55,59,63,64,65,66,68,69,70,71,72,75,76,77,81,83,93,94,96));  //blocks dependant on others. to put in last
+	private ArrayList<Integer> blocks_last = new ArrayList<Integer>(Arrays.asList(6,18,26,27,28,31,32,37,38,39,40,50,55,59,63,64,65,66,68,69,70,71,72,75,76,77,81,83,93,94,96));  //blocks dependant on others. to put in last
 	private ArrayList<Integer> blocks_non_solid = new ArrayList<Integer>(Arrays.asList(0,6,8,9,26,27,28,30,31,37,38,39,40, 50,55,59,63,64,65,66,68,69,70,71,72,75,76,77,78,83,90,93,94,96));   //the player can breathe
 	//private ArrayList<Integer> attachable_blocks = new ArrayList<Integer>(Arrays.asList(50, 68, 69, 75, 76, 77));
 	boolean drop_blocks_replaced = true;		//drop items when blocks are overwritten
@@ -336,19 +336,37 @@ public class CreeperHeal extends JavaPlugin {
 		List<Location> list_loc = new ArrayList<Location>();			//to check for duplicates
 		for(Block block : list){
 			if(block.getState() instanceof ContainerBlock) {		//save the inventory
-				chest_contents.put(new Location(block.getWorld(), block.getX(), block.getY(), block.getZ()), ((ContainerBlock) block.getState()).getInventory().getContents().clone());
+				chest_contents.put(block.getLocation(), ((ContainerBlock) block.getState()).getInventory().getContents().clone());
 				((ContainerBlock) block.getState()).getInventory().clear();
 			}
 			else if(block.getState() instanceof Sign) {				//save the text
-				sign_text.put(new Location(block.getWorld(), block.getX(), block.getY(), block.getZ()), ((Sign)block.getState()).getLines());
+				sign_text.put(block.getLocation(), ((Sign)block.getState()).getLines());
 			}
 			switch (block.getType()) {		
 			case IRON_DOOR :				//in case of a door or bed, only store one block to avoid dupes
 			case WOODEN_DOOR :
-			case BED_BLOCK :
 				if(block.getData() < 8) {
 					list_state.add(block.getState());
 					list_loc.add(block.getLocation());
+					list_loc.add(block.getRelative(0, 1, 0).getLocation());		//but store both locations
+					block.setTypeIdAndData(0, (byte)0, false);
+				}
+				break;
+			case BED_BLOCK :
+				byte data = block.getData();
+				if(data < 8) {
+					list_state.add(block.getState());
+					list_loc.add(block.getLocation());
+					BlockFace face;
+					if(data == 0)			//facing the right way
+						face = BlockFace.WEST;
+					else if(data == 1)
+						face = BlockFace.NORTH;
+					else if(data == 2)
+						face = BlockFace.EAST;
+					else
+						face = BlockFace.SOUTH;
+					list_loc.add(block.getRelative(face).getLocation());
 					block.setTypeIdAndData(0, (byte)0, false);
 				}
 				break;
@@ -372,8 +390,31 @@ public class CreeperHeal extends JavaPlugin {
 		for(Block block : list) {			//go over a second time to check for torches, wire, or anything that would drop and store them
 			Block block_up = block.getRelative(BlockFace.UP);
 			if(blocks_last.contains(block_up.getTypeId()) && !list_loc.contains(block_up.getLocation())) {
-				list_state.add(block_up.getState());
-				block_up.setTypeIdAndData(0, (byte)0, false);
+				if(block.getState() instanceof Sign) {				//save the text
+					sign_text.put(block.getLocation(), ((Sign)block.getState()).getLines());
+				}
+				switch (block.getType()) {		
+				case IRON_DOOR :				//in case of a door or bed, only store one block to avoid dupes
+				case WOODEN_DOOR :
+				case BED_BLOCK :
+					if(block.getData() < 8) {
+						list_state.add(block.getState());
+						block.setTypeIdAndData(0, (byte)0, false);
+					}
+					break;
+				case AIR :						//don't store air 
+					break;
+				case TNT :						//allow for tnt to be stored if the setting is there
+					if(replace_tnt) {
+						list_state.add(block.getState());
+						block.setTypeIdAndData(0, (byte)0, false);
+					}
+					break;
+				default :						//store the rest
+					list_state.add(block.getState());
+					block.setTypeIdAndData(0, (byte)0, false);
+					break;
+				}
 			}
 		}
 		
