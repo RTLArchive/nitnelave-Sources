@@ -294,6 +294,7 @@ public class GiftSend extends JavaPlugin{
 						
 						sendToPlayer(player, recipient, givetypeid, durability, giveamount - tmp_amount, playername);
 						
+						
 						int amount_left = giveamount - tmp_amount;
 						if(tmp_amount>0) {		//tool, send the ones that are not damaged at all
 							for (Entry<Integer, ? extends ItemStack> entry : itemsarray.entrySet()) {
@@ -312,9 +313,9 @@ public class GiftSend extends JavaPlugin{
 								if (tmp_amount == 0)
 								break;
 							}
+							sendToPlayer(player, recipient, givetypeid, (byte)0, amount_left - tmp_amount, playername);
 						}
 						
-						sendToPlayer(player, recipient, givetypeid, (byte)0, amount_left - tmp_amount, playername);
 						
 						amount_left = giveamount - tmp_amount;
 						while(tmp_amount>0) {		//tool, send the ones that are differently damaged
