@@ -7,6 +7,8 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map.Entry;
 import java.util.logging.Logger;
@@ -38,6 +40,9 @@ public class GiftSend extends JavaPlugin{
 	public static OddItem OI = null;
 	private static GiftSend plugin;
 	private static File dataFolder;
+	private ArrayList<Integer> tools = new ArrayList<Integer>(Arrays.asList(256,257,258,259,267,268,269,270,271,272,273,274,275,276,277,278,279,283,284,285,286, 290, 291
+			,292, 293,294,298,299,300,301,302,303,304,305,306,307,308,309,310,311,312,313,314,315,316,317,346,359));			//tools that can be damaged
+
 
 
 	public void onDisable() {
@@ -148,11 +153,13 @@ public class GiftSend extends JavaPlugin{
 
 			if (canUseCommand) {
 
-				if (args.length > 1) {
+				if (args.length > 0) {
 					String playername = args[0];
-					String itemamount = args[1];
+					String itemamount = "1";	//default value
 					String tmpdurability = null;
 					String itemstring = null;
+					if(args.length > 1)
+						itemamount = args[1];
 					if(args.length>2)
 						itemstring = args[2];
 
@@ -184,6 +191,7 @@ public class GiftSend extends JavaPlugin{
 					if(itemstring == null){
 						if(player.getItemInHand().getTypeId() != 0){
 							itemstring = Integer.toString(player.getItemInHand().getTypeId());
+							durability = player.getItemInHand().getDurability();
 						}
 						else {
 							player.sendMessage("Hold an item in your hand, or use this syntax :");
@@ -214,8 +222,7 @@ public class GiftSend extends JavaPlugin{
 					}
 
 					//allows offline transfers
-					Player testplayer = getServer().getPlayer(playername);
-					String materialname;
+					Player recipient = getServer().getPlayer(playername);
 
 					//Checks to see if you have enough
 					itemsarray = player.getInventory().all(Material.getMaterial(givetypeid));
@@ -226,7 +233,7 @@ public class GiftSend extends JavaPlugin{
 						
 
 
-							if (value.getDurability() == durability && value.getAmount() > 0){
+							if ((value.getDurability() == durability || tools.contains(givetypeid)) && value.getAmount() > 0){
 
 								playerHasInInventory = playerHasInInventory + value.getAmount(); 
 							}
@@ -234,16 +241,16 @@ public class GiftSend extends JavaPlugin{
 					}
 
 					//Checks to see if players are close enough
-					if (testplayer != null) {
+					if (recipient != null) {
 						if (maxradius > 0) {
 							int totaldistance =0;
 
 							int x1 = player.getLocation().getBlockX();
 							int y1 = player.getLocation().getBlockY();
 							int z1 = player.getLocation().getBlockZ();
-							int x2 = testplayer.getLocation().getBlockX();
-							int y2 = testplayer.getLocation().getBlockY();
-							int z2 = testplayer.getLocation().getBlockZ();
+							int x2 = recipient.getLocation().getBlockX();
+							int y2 = recipient.getLocation().getBlockY();
+							int z2 = recipient.getLocation().getBlockZ();
 
 							totaldistance = ((x1 - x2)^2 + (y1 - y2)^2 +(z1 - z2)^2);
 							if (totaldistance >= (maxradius^2)) {
@@ -282,55 +289,61 @@ public class GiftSend extends JavaPlugin{
 									player.getInventory().addItem(new ItemStack(givetypeid, (value.getAmount() - tmp_amount), durability));
 									tmp_amount = 0;
 								}
-							}
-							
+							}			
 						}
-
-						//player is not online, store in offline.txt
-						if (testplayer == null || !testplayer.isOnline()) {	
-							writeOffline(player, playername, givetypeid, durability, giveamount, false);
-							
-
-						}
-
-						//both online, do in real time
-						else {
-							//make sure that the receiving player's inventory isn't full
-							if (testplayer.getInventory().firstEmpty() >= 0) {
-
-								//remove the item
-								int tmpamount = giveamount;
-								int stack_size = Material.getMaterial(givetypeid).getMaxStackSize();
-								if(givetypeid == 357) 
-									stack_size = 8;
-								while(tmpamount > 0) {
-									if(testplayer.getInventory().firstEmpty() == -1)
-										break;
-									testplayer.getInventory().addItem(new ItemStack(givetypeid, Math.min(tmpamount, stack_size), durability));
-									tmpamount -= Math.min(tmpamount, stack_size);
-								}
-								
-								materialname = Material.getMaterial(givetypeid).toString().toLowerCase().replace("_", " ");
-								if (giveamount > 1) {
-									if (materialname.endsWith("s") || materialname.endsWith("z"))
-										materialname = materialname+"es";
-									else
-										materialname = materialname+"s";
-								}
-
-								player.sendMessage(ChatColor.GRAY+"You gave "+ChatColor.GREEN+testplayer.getName()+" "+ChatColor.GRAY+itemamount+" "+ ChatColor.RED+materialname);
-								testplayer.sendMessage(ChatColor.GREEN+player.getName()+ChatColor.GRAY+" gave you "+itemamount+" "+ChatColor.RED+materialname);
-								if(tmpamount > 0) {
-									writeOffline(player, testplayer.getName(), givetypeid, durability, tmpamount, false);
-									player.sendMessage(ChatColor.GREEN+testplayer.getName()+"'s "+ChatColor.GRAY+" inventory is full. Only part of the items were sent.");
-									testplayer.sendMessage(ChatColor.GREEN+player.getName()+ChatColor.GRAY+" tried to send you something, but you have no space left. Try to reconnect with some space.");
-								}
-							}
-							else {
-								player.sendMessage(ChatColor.GREEN+testplayer.getName()+"'s "+ChatColor.GRAY+" inventory is full. Try again later.");
-								testplayer.sendMessage(ChatColor.GREEN+player.getName()+ChatColor.GRAY+" tried to send you something, but you have no space.");
+						
+						sendToPlayer(player, recipient, givetypeid, durability, giveamount - tmp_amount, playername);
+						
+						int amount_left = giveamount - tmp_amount;
+						if(tmp_amount>0) {		//tool, send the ones that are not damaged at all
+							for (Entry<Integer, ? extends ItemStack> entry : itemsarray.entrySet()) {
+								ItemStack value = entry.getValue();
+								if (value.getDurability() == 0) {
+									if (value.getAmount() <= tmp_amount) {
+										tmp_amount = tmp_amount - value.getAmount();
+										player.getInventory().removeItem(value);
+									}
+									else if (value.getAmount() > tmp_amount){
+										player.getInventory().removeItem(value);
+										player.getInventory().addItem(new ItemStack(givetypeid, (value.getAmount() - tmp_amount), durability));
+										tmp_amount = 0;
+									}
+								}	
+								if (tmp_amount == 0)
+								break;
 							}
 						}
+						
+						sendToPlayer(player, recipient, givetypeid, (byte)0, amount_left - tmp_amount, playername);
+						
+						amount_left = giveamount - tmp_amount;
+						while(tmp_amount>0) {		//tool, send the ones that are differently damaged
+							short tmpDurability = (byte)0;
+							for (Entry<Integer, ? extends ItemStack> entry : itemsarray.entrySet()) {
+								tmpDurability = entry.getValue().getDurability();
+								break;
+							}
+							for (Entry<Integer, ? extends ItemStack> entry : itemsarray.entrySet()) {
+								ItemStack value = entry.getValue();
+								if(value.getDurability() == tmpDurability) {
+									if (value.getAmount() <= tmp_amount) {
+										tmp_amount = tmp_amount - value.getAmount();
+										player.getInventory().removeItem(value);
+									}
+									else if (value.getAmount() > tmp_amount){
+										player.getInventory().removeItem(value);
+										player.getInventory().addItem(new ItemStack(givetypeid, (value.getAmount() - tmp_amount), durability));
+										tmp_amount = 0;
+									}
+								}
+								if(tmp_amount == 0)
+									break;
+							}
+							sendToPlayer(player, recipient, givetypeid, tmpDurability, amount_left - tmp_amount, playername);
+
+						}
+
+						
 					}
 				}
 				else {
@@ -346,6 +359,19 @@ public class GiftSend extends JavaPlugin{
 		}
 		return true;
 	}
+	
+	public void sendToPlayer(Player sender, Player recipient, int givetypeid, short durability, int giveamount, String playername) {
+		//player is not online, store in offline.txt
+		if (recipient == null || !recipient.isOnline()) {	
+			writeOffline(sender, playername, givetypeid, durability, giveamount, false);
+		}
+		//both online, do in real time
+		else {
+			sendOnline(sender, recipient, givetypeid, durability, giveamount);
+		}
+	}
+	
+	
 	static void writeOffline(Player sender, String recipient, int givetypeid, short durability, int giveamount, boolean listener) {
 		File offlineFile = new File(dataFolder+"/offline.txt");
 		//Write the send to file
@@ -380,6 +406,44 @@ public class GiftSend extends JavaPlugin{
 		}
 		catch (Exception e) {
 			log.info("[GiftSend] Offline transfer to "+recipient+" failed: " + e);
+		}
+	}
+	
+	private void sendOnline(Player sender, Player recipient, int givetypeid, short durability, int giveamount) {
+		//make sure that the receiving player's inventory isn't full
+		if (recipient.getInventory().firstEmpty() >= 0) {
+
+			//remove the item
+			int amount_left = giveamount;
+			int stack_size = Material.getMaterial(givetypeid).getMaxStackSize();
+			if(givetypeid == 357) 
+				stack_size = 8;
+			while(amount_left > 0) {
+				if(recipient.getInventory().firstEmpty() == -1)
+					break;
+				recipient.getInventory().addItem(new ItemStack(givetypeid, Math.min(amount_left, stack_size), durability));
+				amount_left -= Math.min(amount_left, stack_size);
+			}
+			
+			String materialname = Material.getMaterial(givetypeid).toString().toLowerCase().replace("_", " ");
+			if (giveamount > 1) {
+				if (materialname.endsWith("s") || materialname.endsWith("z"))
+					materialname = materialname+"es";
+				else
+					materialname = materialname+"s";
+			}
+			
+			sender.sendMessage(ChatColor.GRAY+"You gave "+ChatColor.GREEN+recipient.getName()+" "+ChatColor.GRAY+giveamount+" "+ ChatColor.RED+materialname);
+			recipient.sendMessage(ChatColor.GREEN+sender.getName()+ChatColor.GRAY+" gave you "+giveamount+" "+ChatColor.RED+materialname);
+			if(amount_left > 0) {
+				writeOffline(sender, recipient.getName(), givetypeid, durability, amount_left, false);
+				sender.sendMessage(ChatColor.GREEN+recipient.getName()+"'s "+ChatColor.GRAY+" inventory is full. Only part of the items were sent.");
+				recipient.sendMessage(ChatColor.GREEN+sender.getName()+ChatColor.GRAY+" tried to send you something, but you have no space left. Try to reconnect with some space.");
+			}
+		}
+		else {
+			sender.sendMessage(ChatColor.GREEN+recipient.getName()+"'s "+ChatColor.GRAY+" inventory is full. Try again later.");
+			recipient.sendMessage(ChatColor.GREEN+sender.getName()+ChatColor.GRAY+" tried to send you something, but you have no space.");
 		}
 	}
 	public static GiftSend getPlugin() {

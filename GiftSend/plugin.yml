@@ -1,6 +1,6 @@
 name: GiftSend
 main: com.GiftSend.GiftSend.GiftSend
-version: 0.4.1
+version: 0.5
 author: nitnelave
 commands:
     send:
