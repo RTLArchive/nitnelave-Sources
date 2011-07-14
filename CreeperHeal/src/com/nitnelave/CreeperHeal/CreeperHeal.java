@@ -522,20 +522,21 @@ public class CreeperHeal extends JavaPlugin {
 			Player[] player_list = getServer().getOnlinePlayers();
 			for(Player player : player_list) {
 				log_info("checking player "+player.getName(),2);
-				double x = player.getLocation().getX();
-				double y = player.getLocation().getY();
-				double z = player.getLocation().getZ();
+				int x = (int) Math.floor(player.getLocation().getX());
+				int y = (int) Math.floor(player.getLocation().getY()+0.5);
+				int z = (int) Math.floor(player.getLocation().getZ());
 				World w = player.getWorld();
-				if(!blocks_non_solid.contains(w.getBlockAt(player.getLocation())) && !blocks_non_solid.contains(w.getBlockAt(new Location(w, x, y + 1, z)))) {
+				if(!blocks_non_solid.contains(w.getBlockAt(x,y,z).getTypeId()) || !blocks_non_solid.contains(w.getBlockAt(x, y + 1, z).getTypeId())) {
 					log_info("player suffocating",1);
 					for(int k =1; k + y < 127; k++) {		//all the way to the sky, checks if there's some room up or around
+						
+						if(check_free(w, x, y+k, z, player))
+							break;
+						
 						if(check_free_horizontal(w, x+k, y, z, player))
 							break;
 						
 						if(check_free_horizontal(w, x-k, y, z, player))
-							break;
-						
-						if(check_free(w, x, y+k, z, player))
 							break;
 						
 						if(check_free_horizontal(w, x, y, z+k, player))
@@ -563,7 +564,9 @@ public class CreeperHeal extends JavaPlugin {
 
 	private boolean check_free(World w, double x, double y, double z, Player player) {
 		if(blocks_non_solid.contains(w.getBlockAt(new Location(w, x, y, z)).getTypeId()) && blocks_non_solid.contains(w.getBlockAt(new Location(w, x, y + 1, z)).getTypeId()) && !blocks_non_solid.contains(w.getBlockAt(new Location(w, x, y-1, z)).getTypeId())) {
-			player.teleport(new Location(w, x, y, z));			//if there's ground under and space to breathe, put the player there
+			Location loc = new Location(w, x+0.5, y, z+0.5);
+			loc.setYaw(player.getLocation().getYaw());
+			player.teleport(loc);			//if there's ground under and space to breathe, put the player there
 			return true;
 		}
 		return false;
