@@ -23,6 +23,7 @@ import org.bukkit.block.Sign;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.TNTPrimed;
 import org.bukkit.event.Event;
 import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.inventory.ItemStack;
@@ -281,7 +282,7 @@ public class CreeperHeal extends JavaPlugin {
 						return true;
 					}
 				}
-				else if(cmd.equalsIgnoreCase("forceHeal")){
+				else if(cmd.equalsIgnoreCase("forceHeal") || cmd.equalsIgnoreCase("heal")){
 					if(args.length == 2){
 						try{
 							long since = Long.parseLong(args[1]);
@@ -334,6 +335,17 @@ public class CreeperHeal extends JavaPlugin {
 		List<Block> list = event.blockList();			//the list declared by the explosion
 		List<BlockState> list_state = new ArrayList<BlockState>();		//the list of blockstate we'll be keeping afterward
 		List<Location> list_loc = new ArrayList<Location>();			//to check for duplicates
+		if(replace_tnt && event.getEntity() instanceof TNTPrimed) {			//to replace the tnt that just exploded
+			int x = (int) Math.floor(event.getEntity().getLocation().getX());
+			int y = (int) Math.floor(event.getEntity().getLocation().getY());
+			int z = (int) Math.floor(event.getEntity().getLocation().getZ());
+			World w = event.getEntity().getWorld();
+			BlockState tmp_state = w.getBlockAt(x, y, z).getState();
+			w.getBlockAt(x, y, z).setTypeId(46);							//set the block to tnt
+			list_state.add(w.getBlockAt(x, y, z).getState());				//record it
+			list_loc.add(new Location(w,x,y,z));
+			w.getBlockAt(x, y, z).setTypeIdAndData(tmp_state.getTypeId(), tmp_state.getRawData(), false);		//set it back to what it was
+		}
 		for(Block block : list){
 			if(block.getState() instanceof ContainerBlock) {		//save the inventory
 				chest_contents.put(block.getLocation(), ((ContainerBlock) block.getState()).getInventory().getContents().clone());
@@ -371,6 +383,7 @@ public class CreeperHeal extends JavaPlugin {
 				}
 				break;
 			case AIR :						//don't store air 
+			case FIRE :						//or fire
 				break;
 			case TNT :						//allow for tnt to be stored if the setting is there
 				if(replace_tnt) {
@@ -488,6 +501,8 @@ public class CreeperHeal extends JavaPlugin {
 				log_info("Blocks replaced!", 1);
 			}
 		}
+		if(since == 0) 
+			replace_burnt(true);
 	}
 	
 	
@@ -522,8 +537,8 @@ public class CreeperHeal extends JavaPlugin {
 			Player[] player_list = getServer().getOnlinePlayers();
 			for(Player player : player_list) {
 				log_info("checking player "+player.getName(),2);
-				int x = (int) Math.floor(player.getLocation().getX());
-				int y = (int) Math.floor(player.getLocation().getY()+0.5);
+				int x = (int) Math.floor(player.getLocation().getX());		//get the player's coordinates in ints, to have the block he's standing on
+				int y = (int) Math.floor(player.getLocation().getY());
 				int z = (int) Math.floor(player.getLocation().getZ());
 				World w = player.getWorld();
 				if(!blocks_non_solid.contains(w.getBlockAt(x,y,z).getTypeId()) || !blocks_non_solid.contains(w.getBlockAt(x, y + 1, z).getTypeId())) {
@@ -657,15 +672,17 @@ public class CreeperHeal extends JavaPlugin {
 	}
 	
 	public void record_burn(Block block) {			//record a burnt block
-		Date now = new Date();
-		map_burn.put(now, block.getState());
-		BlockState block_up = block.getFace(BlockFace.UP).getState();
-		if(blocks_last.contains(block_up.getTypeId())) {		//the block above is a dependent block, store it, but one interval after
-			map_burn.put(new Date(now.getTime() + burn_interval*1000), block_up);
-			if(block_up instanceof Sign) {				//as a side note, chests don't burn, but signs are dependent
-				sign_text.put(new Location(block_up.getWorld(), block_up.getX(), block_up.getY(), block_up.getZ()), ((Sign)block_up).getLines());
+		if(block.getType() != Material.TNT) {		//unless it's TNT triggered by fire
+			Date now = new Date();
+			map_burn.put(now, block.getState());
+			BlockState block_up = block.getFace(BlockFace.UP).getState();
+			if(blocks_last.contains(block_up.getTypeId())) {		//the block above is a dependent block, store it, but one interval after
+				map_burn.put(new Date(now.getTime() + burn_interval*1000), block_up);
+				if(block_up instanceof Sign) {				//as a side note, chests don't burn, but signs are dependent
+					sign_text.put(new Location(block_up.getWorld(), block_up.getX(), block_up.getY(), block_up.getZ()), ((Sign)block_up).getLines());
+				}
+				block_up.getBlock().setTypeIdAndData(0, (byte)0, false);
 			}
-			block_up.getBlock().setTypeIdAndData(0, (byte)0, false);
 		}
 	}
 
