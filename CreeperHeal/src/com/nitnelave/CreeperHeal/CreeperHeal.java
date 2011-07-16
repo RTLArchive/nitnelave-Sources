@@ -11,7 +11,6 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.logging.Logger;
 import java.util.Date;
 
@@ -467,10 +466,8 @@ public class CreeperHeal extends JavaPlugin {
 		Date now = new Date();
 
 		log_info("Replacing blocks...", 3);
-		Set<Date> keyset = map.keySet();
-		Iterator<Date> iterator = keyset.iterator();		//goes over the hashmap containing the explosions
-		while(iterator.hasNext()) {
-			Date time = iterator.next();
+		Date[] keyset = map.keySet().toArray(new Date[map.keySet().size()]);
+		for(Date time : keyset) {
 			if(new Date(time.getTime() + interval.getTime()).before(now)) {		//if enough time went by
 				if(!block_per_block){		//all blocks at once
 					replace_blocks(map.get(time));		//replace the blocks
