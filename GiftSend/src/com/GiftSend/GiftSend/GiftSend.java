@@ -30,18 +30,27 @@ import org.bukkit.plugin.java.JavaPlugin;
 //permissions stuff
 import com.nijikokun.bukkit.Permissions.Permissions;
 import com.nijiko.permissions.PermissionHandler;
+//iConomy
+import com.iConomy.*;
+import com.iConomy.system.Holdings;
+
+import cosine.boseconomy.BOSEconomy;
 
 public class GiftSend extends JavaPlugin{
 	private static Logger log = Logger.getLogger("Minecraft");
 	public static PermissionHandler Permissions = null;
 	private final SGPlayerListener playerListener = new SGPlayerListener(this);
 	private int maxradius = 0;
-	private String allowoffline = null;
+	private boolean allowoffline = false;
 	public static OddItem OI = null;
 	private static GiftSend plugin;
 	private static File dataFolder;
 	private ArrayList<Integer> tools = new ArrayList<Integer>(Arrays.asList(256,257,258,259,267,268,269,270,271,272,273,274,275,276,277,278,279,283,284,285,286, 290, 291
 			,292, 293,294,298,299,300,301,302,303,304,305,306,307,308,309,310,311,312,313,314,315,316,317,346,359));			//tools that can be damaged
+	double fee = 0;
+	public iConomy iConomy = null;
+	BOSEconomy boseconomy = null; // This variable will store the reference to BOSEconomy.
+
 
 
 
@@ -77,6 +86,7 @@ public class GiftSend extends JavaPlugin{
 				out.newLine();
 				out.write("use-permissions: 'permissions'  #permissions, OP or false");
 				out.newLine();
+				out.write("transaction-fee: 0.0    #Fee for sending something");
 
 				//Close the output stream
 				out.close();
@@ -95,7 +105,8 @@ public class GiftSend extends JavaPlugin{
 		}
 
 		maxradius = getConfiguration().getInt("max-range", 0);
-		allowoffline = getConfiguration().getString("allow-offline", "false");
+		allowoffline = getConfiguration().getBoolean("allow-offline", false);
+		fee = getConfiguration().getDouble("transaction-fee", 0);
 
 		PluginManager pm = getServer().getPluginManager();
 
@@ -110,6 +121,25 @@ public class GiftSend extends JavaPlugin{
 		if(OI != null) {
 			log.info("[GiftSend] Successfully connected with OddItem");
 		}
+
+		Plugin iconomy = plugin.getServer().getPluginManager().getPlugin("iConomy");
+
+		if (iconomy != null) {
+			if (iconomy.isEnabled() && iconomy.getClass().getName().equals("com.iConomy.iConomy")) {
+				iConomy = (iConomy)iconomy;
+				log.info("[GiftSend] hooked into iConomy.");
+			}
+		}
+		else {
+			Plugin temp = this.getServer().getPluginManager().getPlugin("BOSEconomy");
+			if(temp != null){
+				boseconomy = (BOSEconomy)temp;
+				log.info("[GiftSend] hooked into BOSEconomy.");
+			}
+		}
+
+		
+
 		//Print that the plugin has been enabled!
 		log.info("[GiftSend] version " + pdfFile.getVersion() + " by nitnelave is enabled!");
 	}
@@ -133,10 +163,18 @@ public class GiftSend extends JavaPlugin{
 
 		if (sender instanceof Player) {
 			Player player = (Player)sender;
-			
+
 			String permissions_config = null;
 			permissions_config = getConfiguration().getString("use-permissions", "OP").trim();
 
+			Holdings ico_money = null;
+			if(iConomy != null) {
+				ico_money = com.iConomy.iConomy.getAccount(player.getName()).getHoldings();
+			}
+			double bos_money = 0;
+			if(boseconomy != null) {
+				bos_money = boseconomy.getPlayerMoneyDouble(player.getName());
+			}
 
 			if (permissions_config.equalsIgnoreCase("permissions") || permissions_config.equalsIgnoreCase("OP")) {
 				if (permissions_config.equalsIgnoreCase("permissions")) {
@@ -144,12 +182,31 @@ public class GiftSend extends JavaPlugin{
 						canUseCommand = Permissions.has(player, "GiftSend.send");
 					}
 				}
-				else {
-					canUseCommand = player.isOp();
+
+			}
+			if(!canUseCommand)
+				sender.sendMessage("You don't have Permissions to do that");
+
+			if(canUseCommand && fee>0 && (iConomy != null || boseconomy != null)) {
+				if(iConomy !=null) {
+					if(!ico_money.hasEnough(fee)) {
+						canUseCommand = false;
+						player.sendMessage("You don't have enough money to send some items.");
+					}
 				}
 				
+				if(boseconomy != null) {
+					if(fee > bos_money)
+						canUseCommand = false;
+				}
+
+				if (Permissions != null && !canUseCommand) {
+					canUseCommand = Permissions.has(player, "GiftSend.nofee");
+				}
 			}
-			
+
+			if(player.isOp())
+				canUseCommand = true;
 
 			if (canUseCommand) {
 
@@ -165,7 +222,7 @@ public class GiftSend extends JavaPlugin{
 
 					if (args.length > 3) 
 						tmpdurability = args[3];
-					
+
 
 					String errormsg = "";
 					int giveamount = 0;
@@ -176,9 +233,9 @@ public class GiftSend extends JavaPlugin{
 						return false;
 					}
 					int givetypeid = 0;
-					
+
 					short durability = 0;
-					
+
 					if (tmpdurability != null){
 						try {
 							durability = Short.parseShort(tmpdurability);
@@ -230,14 +287,14 @@ public class GiftSend extends JavaPlugin{
 
 					for (Entry<Integer, ? extends ItemStack> entry : itemsarray.entrySet()) {
 						ItemStack value = entry.getValue();
-						
 
 
-							if ((value.getDurability() == durability || tools.contains(givetypeid)) && value.getAmount() > 0){
 
-								playerHasInInventory = playerHasInInventory + value.getAmount(); 
-							}
-						
+						if ((value.getDurability() == durability || tools.contains(givetypeid)) && value.getAmount() > 0){
+
+							playerHasInInventory = playerHasInInventory + value.getAmount(); 
+						}
+
 					}
 
 					//Checks to see if players are close enough
@@ -259,7 +316,7 @@ public class GiftSend extends JavaPlugin{
 						}
 					}
 					else {
-						if (allowoffline.matches("false")) {
+						if (!allowoffline) {
 							errormsg = "That player is not online.";
 						}
 					}
@@ -275,6 +332,7 @@ public class GiftSend extends JavaPlugin{
 
 					//start the transfer
 					else {
+						
 						short tmp_durability = durability;
 						int tmp_amount = giveamount;
 						for (Entry<Integer, ? extends ItemStack> entry : itemsarray.entrySet()) {
@@ -291,10 +349,10 @@ public class GiftSend extends JavaPlugin{
 								}
 							}			
 						}
-						
+
 						sendToPlayer(player, recipient, givetypeid, durability, giveamount - tmp_amount, playername);
-						
-						
+
+
 						int amount_left = giveamount - tmp_amount;
 						if(tmp_amount>0) {		//tool, send the ones that are not damaged at all
 							for (Entry<Integer, ? extends ItemStack> entry : itemsarray.entrySet()) {
@@ -311,12 +369,12 @@ public class GiftSend extends JavaPlugin{
 									}
 								}	
 								if (tmp_amount == 0)
-								break;
+									break;
 							}
 							sendToPlayer(player, recipient, givetypeid, (byte)0, amount_left - tmp_amount, playername);
 						}
-						
-						
+
+
 						amount_left = giveamount - tmp_amount;
 						while(tmp_amount>0) {		//tool, send the ones that are differently damaged
 							short tmpDurability = (byte)0;
@@ -343,16 +401,21 @@ public class GiftSend extends JavaPlugin{
 							sendToPlayer(player, recipient, givetypeid, tmpDurability, amount_left - tmp_amount, playername);
 
 						}
+						if(iConomy != null) {
+							ico_money.subtract(fee);
+							player.sendMessage("The transaction cost you : "+ com.iConomy.iConomy.format(fee));
+						}
+						if(boseconomy != null) {
+							boseconomy.addPlayerMoney(player.getName(), -fee, true);
+							player.sendMessage("The transaction cost you : "+boseconomy.getMoneyFormatted(fee));
+						}
 
-						
+
 					}
 				}
 				else {
 					return false;
 				}
-			}
-			else {
-				sender.sendMessage("You don't have Permissions to do that");
 			}
 		}
 		else {
@@ -360,7 +423,7 @@ public class GiftSend extends JavaPlugin{
 		}
 		return true;
 	}
-	
+
 	public void sendToPlayer(Player sender, Player recipient, int givetypeid, short durability, int giveamount, String playername) {
 		//player is not online, store in offline.txt
 		if (recipient == null || !recipient.isOnline()) {	
@@ -371,8 +434,8 @@ public class GiftSend extends JavaPlugin{
 			sendOnline(sender, recipient, givetypeid, durability, giveamount);
 		}
 	}
-	
-	
+
+
 	static void writeOffline(Player sender, String recipient, int givetypeid, short durability, int giveamount, boolean listener) {
 		File offlineFile = new File(dataFolder+"/offline.txt");
 		//Write the send to file
@@ -409,7 +472,7 @@ public class GiftSend extends JavaPlugin{
 			log.info("[GiftSend] Offline transfer to "+recipient+" failed: " + e);
 		}
 	}
-	
+
 	private void sendOnline(Player sender, Player recipient, int givetypeid, short durability, int giveamount) {
 		//make sure that the receiving player's inventory isn't full
 		if (recipient.getInventory().firstEmpty() >= 0) {
@@ -425,7 +488,7 @@ public class GiftSend extends JavaPlugin{
 				recipient.getInventory().addItem(new ItemStack(givetypeid, Math.min(amount_left, stack_size), durability));
 				amount_left -= Math.min(amount_left, stack_size);
 			}
-			
+
 			String materialname = Material.getMaterial(givetypeid).toString().toLowerCase().replace("_", " ");
 			if (giveamount > 1) {
 				if (materialname.endsWith("s") || materialname.endsWith("z"))
@@ -433,7 +496,7 @@ public class GiftSend extends JavaPlugin{
 				else
 					materialname = materialname+"s";
 			}
-			
+
 			sender.sendMessage(ChatColor.GRAY+"You gave "+ChatColor.GREEN+recipient.getName()+" "+ChatColor.GRAY+giveamount+" "+ ChatColor.RED+materialname);
 			recipient.sendMessage(ChatColor.GREEN+sender.getName()+ChatColor.GRAY+" gave you "+giveamount+" "+ChatColor.RED+materialname);
 			if(amount_left > 0) {
@@ -444,7 +507,7 @@ public class GiftSend extends JavaPlugin{
 		}
 		else {
 			sender.sendMessage(ChatColor.GREEN+recipient.getName()+"'s "+ChatColor.GRAY+" inventory is full. Try again later.");
-			recipient.sendMessage(ChatColor.GREEN+sender.getName()+ChatColor.GRAY+" tried to send you something, but you have no space.");
+			recipient.sendMessage(ChatColor.GREEN+sender.getName()+ChatColor.GRAY+" tried to send you something, but you have no space left. Try to reconnect with some space.");
 		}
 	}
 	public static GiftSend getPlugin() {
