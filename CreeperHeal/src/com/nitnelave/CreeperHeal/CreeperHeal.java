@@ -879,6 +879,13 @@ public class CreeperHeal extends JavaPlugin {
 		catch (Exception e) {
 			log.warning("[CreeperHeal] Wrong values for teleport-on-suffocate field. Defaulting to true.");
 		}
+		
+		try{
+			teleport_block_per_block = getConfiguration().getBoolean("teleport-on-suffocate-block-per-block", true);
+		}
+		catch (Exception e) {
+			log.warning("[CreeperHeal] Wrong values for teleport-on-suffocate-block-per-block field. Defaulting to true.");
+		}
 
 		try{
 			replace_burn = getConfiguration().getBoolean("replace-burnt-blocks", true);
@@ -970,6 +977,8 @@ public class CreeperHeal extends JavaPlugin {
 			out.write("drop-replaced-blocks: "+Boolean.toString(drop_blocks_replaced)+"      #gives back a drop when you place a block in an area to be healed");
 			out.newLine();
 			out.write("teleport-on-suffocate: "+Boolean.toString(teleport_on_suffocate)+"     #Teleport players out of explosions being healed if they suffocate (not for block_per_block)");
+			out.newLine();
+			out.write("teleport-on-suffocate-block-per-block: "+Boolean.toString(teleport_block_per_block)+"     #Teleport players out of explosions being healed if they suffocate (for block_per_block)");
 			out.newLine();
 			out.write("replace-tnt: "+Boolean.toString(replace_tnt)+"     #whether exploding tnt should be replaced or not");
 			out.newLine();
