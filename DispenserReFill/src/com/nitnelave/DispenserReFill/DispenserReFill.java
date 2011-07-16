@@ -88,7 +88,7 @@ public class DispenserReFill extends JavaPlugin {
 				out.close();
 			}
 			catch (Exception e) {
-				log.warning("[DispenserReFill] Cannot write config file: "+e);
+				log.warning("[DispenserReFill] Cannot write config file: "+e.getLocalizedMessage());
 			}
 		}
 		//read config
@@ -751,6 +751,7 @@ public class DispenserReFill extends JavaPlugin {
 
 		try {
 			BufferedReader in = new BufferedReader(new FileReader(refill_file));
+			boolean rewrite = false;
 			String str;
 			ArrayList<String> file_lines = new ArrayList<String>();
 			while((str = in.readLine())!= null) {
@@ -780,7 +781,17 @@ public class DispenserReFill extends JavaPlugin {
 						}
 						file_lines.add(str);
 					}
+					else 
+						rewrite = true;
 				}
+				else
+					rewrite = true;
+
+
+
+			}
+
+			if(rewrite) {
 				if (!refill_file.delete()) { //delete file to update
 					log.warning("[DispenserReFill] Could not rewrite file refill.yml");
 				}
@@ -795,14 +806,13 @@ public class DispenserReFill extends JavaPlugin {
 				catch (IOException e) {
 					log.warning("[DispenserReFill] Could not write to file refill.yml: "+e);
 				}
-
-
-
 			}
+			
 		}
 		catch (IOException e) {
 			log.warning("[DispenserReFill] Cannot read refill file refill.yml: "+e);
 		}
+		
 		if(logRefresh)
 			log.info("[DispenserReFill] Refresh finished");
 	}
