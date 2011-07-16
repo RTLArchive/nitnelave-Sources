@@ -354,10 +354,17 @@ public class CreeperHeal extends JavaPlugin {
 		List<Block> list = event.blockList();			//the list declared by the explosion
 		List<BlockState> list_state = new ArrayList<BlockState>();		//the list of blockstate we'll be keeping afterward
 		List<Location> list_loc = new ArrayList<Location>();			//to check for duplicates
+		if(maHandler != null) {
+			if (maHandler.inRegion(event.getLocation())) {
+				log_info("Explosion ignored, inside a mob arena", 2);
+				return;
+			}
+				
+		}
 		if(replace_tnt && event.getEntity() instanceof TNTPrimed) {			//to replace the tnt that just exploded
-			int x = (int) Math.floor(event.getEntity().getLocation().getX());
-			int y = (int) Math.floor(event.getEntity().getLocation().getY());
-			int z = (int) Math.floor(event.getEntity().getLocation().getZ());
+			int x = (int) Math.floor(event.getLocation().getX());
+			int y = (int) Math.floor(event.getLocation().getY());
+			int z = (int) Math.floor(event.getLocation().getZ());
 			World w = event.getEntity().getWorld();
 			BlockState tmp_state = w.getBlockAt(x, y, z).getState();
 			w.getBlockAt(x, y, z).setTypeId(46);							//set the block to tnt
@@ -365,6 +372,7 @@ public class CreeperHeal extends JavaPlugin {
 			list_loc.add(new Location(w,x,y,z));
 			w.getBlockAt(x, y, z).setTypeIdAndData(tmp_state.getTypeId(), tmp_state.getRawData(), false);		//set it back to what it was
 		}
+		
 		for(Block block : list){
 			if(block.getState() instanceof ContainerBlock) {		//save the inventory
 				chest_contents.put(block.getLocation(), ((ContainerBlock) block.getState()).getInventory().getContents().clone());
@@ -679,12 +687,7 @@ public void block_replace(Block block, int type_id, byte rawData) {
 	int block_id = block.getTypeId();		//id of the block in the world, before it is replaced
 
 	if(!blocks_no_drop.contains(block_id) && drop_blocks_replaced) {		//drop an item in the spot
-		if(maHandler != null) {
-			if (!maHandler.inRegion(block.getLocation()))
-				block.getWorld().dropItemNaturally(block.getLocation(), new ItemStack(block_id, 1, block.getData()));
-		}
-		else
-			block.getWorld().dropItemNaturally(block.getLocation(), new ItemStack(block_id, 1, block.getData()));
+		block.getWorld().dropItemNaturally(block.getLocation(), new ItemStack(block_id, 1, block.getData()));
 	}
 	if((natural_only.equalsIgnoreCase("whitelist") && whitelist_natural.contains(type_id) 
 			|| (natural_only.equalsIgnoreCase("blacklist") && !blacklist_natural.contains(type_id) 
