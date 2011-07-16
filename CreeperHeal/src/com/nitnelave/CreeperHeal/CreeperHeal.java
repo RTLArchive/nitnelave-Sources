@@ -44,6 +44,8 @@ import org.bukkit.util.Vector;
 import com.nijiko.permissions.PermissionHandler;
 import com.nijikokun.bukkit.Permissions.Permissions;
 
+import com.garbagemule.MobArena.MobArenaHandler;
+
 
 
 public class CreeperHeal extends JavaPlugin {
@@ -80,6 +82,7 @@ public class CreeperHeal extends JavaPlugin {
 	boolean replace_other = false;	//replace damage done by other entities (see listener)
 	String natural_only = "false";	//whitelist, blacklist or nothing
 	boolean teleport_block_per_block = true;
+	MobArenaHandler maHandler = null;
 
 
 
@@ -102,6 +105,11 @@ public class CreeperHeal extends JavaPlugin {
 
 		PluginDescriptionFile pdfFile = this.getDescription();
 		setup_permissions();
+		
+		Plugin mobArena = getServer().getPluginManager().getPlugin("MobArena");
+		if(mobArena != null) {
+			maHandler = new MobArenaHandler();
+		}
 
 
 		try {			//reading refresh-frequency and block-interval from config. Has to be in onEnable(), because we declare a bukkitscheduler task after that. 
@@ -671,7 +679,12 @@ public void block_replace(Block block, int type_id, byte rawData) {
 	int block_id = block.getTypeId();		//id of the block in the world, before it is replaced
 
 	if(!blocks_no_drop.contains(block_id) && drop_blocks_replaced) {		//drop an item in the spot
-		block.getWorld().dropItemNaturally(block.getLocation(), new ItemStack(block_id, 1, block.getData()));
+		if(maHandler != null) {
+			if (!maHandler.inRegion(block.getLocation()))
+				block.getWorld().dropItemNaturally(block.getLocation(), new ItemStack(block_id, 1, block.getData()));
+		}
+		else
+			block.getWorld().dropItemNaturally(block.getLocation(), new ItemStack(block_id, 1, block.getData()));
 	}
 	if((natural_only.equalsIgnoreCase("whitelist") && whitelist_natural.contains(type_id) 
 			|| (natural_only.equalsIgnoreCase("blacklist") && !blacklist_natural.contains(type_id) 
