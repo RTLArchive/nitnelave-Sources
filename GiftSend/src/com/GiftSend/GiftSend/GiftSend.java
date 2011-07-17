@@ -158,6 +158,7 @@ public class GiftSend extends JavaPlugin{
 
 	public boolean onCommand(CommandSender sender, Command cmd, String commandLabel, String[] args) {
 		boolean canUseCommand = true;
+		boolean paying = false;
 
 		HashMap<Integer, ? extends ItemStack> itemsarray = new HashMap<Integer, ItemStack>();
 
@@ -188,6 +189,7 @@ public class GiftSend extends JavaPlugin{
 				sender.sendMessage("You don't have Permissions to do that");
 
 			if(canUseCommand && fee>0 && (iConomy != null || boseconomy != null)) {
+				paying = true;
 				if(iConomy !=null) {
 					if(!ico_money.hasEnough(fee)) {
 						canUseCommand = false;
@@ -202,6 +204,7 @@ public class GiftSend extends JavaPlugin{
 
 				if (Permissions != null && !canUseCommand) {
 					canUseCommand = Permissions.has(player, "GiftSend.nofee");
+					paying = false;
 				}
 			}
 
@@ -401,14 +404,17 @@ public class GiftSend extends JavaPlugin{
 							sendToPlayer(player, recipient, givetypeid, tmpDurability, amount_left - tmp_amount, playername);
 
 						}
-						if(iConomy != null) {
-							ico_money.subtract(fee);
-							player.sendMessage("The transaction cost you : "+ com.iConomy.iConomy.format(fee));
+						if(paying) {
+							if(iConomy != null) {
+								ico_money.subtract(fee);
+								player.sendMessage("The transaction cost you : "+ com.iConomy.iConomy.format(fee));
+							}
+							if(boseconomy != null) {
+								boseconomy.addPlayerMoney(player.getName(), -fee, true);
+								player.sendMessage("The transaction cost you : "+boseconomy.getMoneyFormatted(fee));
+							}
 						}
-						if(boseconomy != null) {
-							boseconomy.addPlayerMoney(player.getName(), -fee, true);
-							player.sendMessage("The transaction cost you : "+boseconomy.getMoneyFormatted(fee));
-						}
+						
 
 
 					}
