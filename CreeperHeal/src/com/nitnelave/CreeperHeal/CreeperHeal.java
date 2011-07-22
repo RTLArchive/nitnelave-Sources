@@ -134,7 +134,7 @@ public class CreeperHeal extends JavaPlugin {
 		if(block_per_block)					//or every "block_interval" ticks if block_per_block
 			tmp_period = block_interval;
 		if(tnt || creeper) {
-			if( getServer().getScheduler().scheduleAsyncRepeatingTask(this, new Runnable() {
+			if( getServer().getScheduler().scheduleSyncRepeatingTask(this, new Runnable() {
 				public void run() {
 					check_replace(block_per_block);		//check to replace explosions/blocks
 				}}, 200, tmp_period) == -1)
@@ -143,7 +143,7 @@ public class CreeperHeal extends JavaPlugin {
 
 
 		if(replace_burn) {		//register burnt_blocks replacement task
-			if( getServer().getScheduler().scheduleAsyncRepeatingTask(this, new Runnable() {
+			if( getServer().getScheduler().scheduleSyncRepeatingTask(this, new Runnable() {
 				public void run() {
 					replace_burnt(false);
 				}}, 200, block_interval) == -1)
@@ -504,23 +504,25 @@ public class CreeperHeal extends JavaPlugin {
 
 	}
 
-private void replace_one_block(List<BlockState> list) {		//replace one block (block per block
+private void replace_one_block(List<BlockState> list) {		//replace one block (block per block)
 
 	Iterator<BlockState> iter = list.iterator();
 	while(iter.hasNext()){		//finds the first block that is not dependent
 		BlockState block = iter.next();
 		if(!blocks_last.contains(block.getTypeId())){
 			replace_blocks(block);		//replace it
-			check_player_one_block(block.getBlock().getLocation());
-			log_info(block.getType().toString(), 3);
-			iter.remove();		//remove it
-			return;
+				check_player_one_block(block.getBlock().getLocation());
+				log_info(block.getType().toString(), 3);
+				iter.remove();		//remove it
+				return;
+			
 		}
 	}
 	replace_blocks(list.get(0));		//only dependent blocks left, replace the first
 	check_player_one_block(list.get(0).getBlock().getLocation());
 	log_info(list.get(0).getType().toString(), 3);
 	list.remove(0);
+	
 }
 
 public void check_player_one_block(Location loc) {
@@ -593,7 +595,7 @@ private void replace_blocks(List<BlockState> list) {	//replace all the blocks in
 			BlockState block = iter.next();
 			if(!blocks_physics.contains(block.getTypeId()) && !blocks_last.contains(block.getTypeId())){
 				block_state_replace(block);
-				iter.remove();
+					iter.remove();
 			}
 		}
 		iter = list.iterator();
@@ -601,7 +603,7 @@ private void replace_blocks(List<BlockState> list) {	//replace all the blocks in
 			BlockState block = iter.next();
 			if(blocks_physics.contains(block.getTypeId())){
 				block_state_replace(block);
-				iter.remove();
+					iter.remove();
 			}
 		}
 		iter = list.iterator();
@@ -609,7 +611,7 @@ private void replace_blocks(List<BlockState> list) {	//replace all the blocks in
 			BlockState block = iter.next();
 			if(blocks_last.contains(block.getTypeId())){
 				block_state_replace(block);
-				iter.remove();
+					iter.remove();
 			}
 		}
 	}
@@ -649,6 +651,10 @@ private void replace_blocks(BlockState block) {		//if there's just one block, no
 
 //replaces a single block, first sort
 public void block_state_replace(BlockState block){
+	/*BlockFace dependentFace = getDependentBlock(block);
+	if(dependentFace != BlockFace.SELF && blocks_non_solid.contains(block.getBlock().getFace(dependentFace).getTypeId())){
+		return false;
+	}*/
 	if (block.getType() == Material.WOODEN_DOOR || block.getType() == Material.IRON_DOOR_BLOCK) {		//if it's a door, put the bottom then the top (which is unrecorded)
 		block_replace(block.getBlock(), block.getTypeId(), block.getRawData());
 		block_replace(block.getBlock().getFace(BlockFace.UP), block.getTypeId(), (byte)(block.getRawData() + 8));
@@ -680,6 +686,7 @@ public void block_state_replace(BlockState block){
 	else {		//rest of it, just normal
 		block_replace(block.getBlock(), block.getTypeId(), block.getRawData());
 	}
+	//return true;
 
 }
 //actual replacement method
@@ -764,30 +771,28 @@ public void record_burn(Block block) {			//record a burnt block
 }
 
 public void replace_burnt(boolean force) {		//checks for burnt blocks to replace, with an override for onDisable()
-	Iterator<Date> iter = map_burn.keySet().iterator();
+	Date[] keyset = map_burn.keySet().toArray(new Date[map_burn.keySet().size()]);
+
 	Date now = new Date();
-	HashMap<Date, BlockState> to_add = new HashMap<Date, BlockState>();
-	while(iter.hasNext()) {
-		Date time = iter.next();
+	for(Date time : keyset) {
 		if((new Date(time.getTime() + burn_interval * 1000).before(now)) || force) {		//if enough time went by
 			BlockState block = map_burn.get(time);
 			if(blocks_last.contains(block.getTypeId())) {
 				if(blocks_non_solid.contains(block.getBlock().getFace(BlockFace.DOWN).getTypeId()) && !force) {		//if it's a dependent, and there's nothing under, store it for later
-					iter.remove();
-					to_add.put(new Date(time.getTime() + burn_interval*1000), block);
+					map_burn.remove(time);
+					map_burn.put(new Date(time.getTime() + burn_interval*1000), block);
 				}
 				else {
-					replace_blocks(block);		//replace the block as there's something under
-					iter.remove();
+					replace_blocks(block); 		//replace the block as there's something under
+					map_burn.remove(time);
 				}
 			}
 			else {
 				replace_blocks(block);		//replace the non-dependent block
-				iter.remove();
+				map_burn.remove(time);
 			}
 		}
 	}
-	map_burn.putAll(to_add);		//stores the non-dependent to be re-checked later
 }
 
 
@@ -796,9 +801,60 @@ public void log_info(String msg, int min_level) {		//logs a message, according t
 		log.info("[CreeperHeal] "+msg);
 }
 
+public BlockFace getDependentBlock(BlockState block) {
+	int id = block.getTypeId();
+	byte data = block.getRawData();
+	if(data > 7)
+		data -= 8;
+	if(id == 50 || id == 75 || id == 76 || id==69) {
+		switch (data) {
+		case 1:
+			return BlockFace.NORTH;
+		case 2:
+			return BlockFace.SOUTH;
+		case 3: 
+			return BlockFace.EAST;
+		case 4: 
+			return BlockFace.WEST;
+		case 5:
+			return BlockFace.DOWN;
+		case 6:
+			return BlockFace.DOWN;
+		}
+	}
+	else if(id == 6 || id==26 || id==27 || id==28 || id==31 || id==32 || id == 37 || id == 38 || id==39 || id==40 || id == 55 || id == 59 || id == 63 || id == 64 || id == 66 || id==70 || id == 71 || id == 72 || id == 78 || id == 92 || id == 93 || id == 94 ) {
+		return BlockFace.DOWN;
+	}
+	else if(id == 65 || id==77 || id==96) {
+		switch(data) {
+		case 2:
+			return BlockFace.WEST;
+		case 3:
+			return BlockFace.EAST;
+		case 4:
+			return BlockFace.SOUTH;
+		case 5: 
+			return BlockFace.NORTH;
+		}
+	}
+	else if(id==68){
+		switch(data){
+		case 2:
+			return BlockFace.EAST;
+		case 3: 
+			return BlockFace.WEST;
+		case 4:
+			return BlockFace.NORTH;
+		case 5:
+			return BlockFace.SOUTH;
+		}
+	}
+	return BlockFace.SELF;
+}
 
 
-private void loadConfig(){			//reds the config
+
+private void loadConfig(){			//reads the config
 	int interval_date;
 	try {
 		interval_date = getConfiguration().getInt("interval", 60);		//tries to read the value directly from the config
