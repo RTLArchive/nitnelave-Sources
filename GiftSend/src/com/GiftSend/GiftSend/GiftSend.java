@@ -82,7 +82,7 @@ public class GiftSend extends JavaPlugin{
 
 				out.write("max-range: 100");
 				out.newLine();
-				out.write("allow-offline: 'true'");
+				out.write("allow-offline: true");
 				out.newLine();
 				out.write("use-permissions: 'permissions'  #permissions, OP or false");
 				out.newLine();
