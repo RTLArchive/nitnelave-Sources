@@ -217,7 +217,7 @@ public class CreeperHeal extends JavaPlugin {
 						sender.sendMessage("Toggles burnt blocks replacement on/off");
 						return true;
 					}
-					sender.sendMessage("Burnt blocks replacement set to : "+Boolean.toString(tnt));
+					sender.sendMessage("Burnt blocks replacement set to : "+Boolean.toString(replace_burn));
 				}
 				else if(cmd.equalsIgnoreCase("ghast")){
 					if(args.length == 1)
@@ -231,7 +231,7 @@ public class CreeperHeal extends JavaPlugin {
 						sender.sendMessage("Toggles ghast explosions replacement on/off");
 						return true;
 					}
-					sender.sendMessage("Ghast explosions replacement set to : "+Boolean.toString(tnt));
+					sender.sendMessage("Ghast explosions replacement set to : "+Boolean.toString(replace_ghast));
 				}
 				else if(cmd.equalsIgnoreCase("magical")){
 					if(args.length == 1)
@@ -245,7 +245,7 @@ public class CreeperHeal extends JavaPlugin {
 						sender.sendMessage("Toggles magical explosions replacement on/off");
 						return true;
 					}
-					sender.sendMessage("Magical explosions replacement set to : "+Boolean.toString(tnt));
+					sender.sendMessage("Magical explosions replacement set to : "+Boolean.toString(replace_other));
 				}
 				else if(cmd.equalsIgnoreCase("dropReplaced")) {
 					if(args.length == 1)
@@ -324,7 +324,7 @@ public class CreeperHeal extends JavaPlugin {
 				}
 				else {		// /ch something gets back to the help
 					sender.sendMessage("CreeperHeal -- heals Creepers's damage");
-					sender.sendMessage("/ch [forceheal|Creeper|TNT|interval|dropReplaced|fire|burnInterval|ghast|magical]");
+					sender.sendMessage("/ch [heal|Creeper|TNT|interval|dropReplaced|fire|burnInterval|ghast|magical]");
 					return true;
 				}
 
@@ -334,7 +334,7 @@ public class CreeperHeal extends JavaPlugin {
 			}
 			else {
 				sender.sendMessage("CreeperHeal -- heals Creepers's damage");
-				sender.sendMessage("/ch [forceheal|Creeper|TNT|interval|dropReplaced|fire|burnInterval|ghast|magical]");
+				sender.sendMessage("/ch [heal|Creeper|TNT|interval|dropReplaced|fire|burnInterval|ghast|magical]");
 				return true;
 			}
 		}
