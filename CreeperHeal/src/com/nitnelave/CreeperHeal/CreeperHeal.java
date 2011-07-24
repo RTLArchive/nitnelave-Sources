@@ -11,6 +11,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.logging.Logger;
 import java.util.Date;
 
@@ -64,7 +65,6 @@ public class CreeperHeal extends JavaPlugin {
 	boolean tnt = false;						//same for tnt
 	private ArrayList<Integer> whitelist_natural = new ArrayList<Integer>(Arrays.asList(1,2,3,9,11,12,13,14,15,16,17,18,21,24,31,32,37,38,39,40,48,49,56,73,79,81,82,86,87,88,89));  //default list of block_id for whitelist
 	private ArrayList<Integer> blacklist_natural = new ArrayList<Integer>(Arrays.asList(0));														//same for blacklist
-	private ArrayList<Integer> blocks_no_drop = new ArrayList<Integer>(Arrays.asList(0, 8, 9, 10, 11, 12, 13, 18, 51, 78, 79, 88));					//blocks that don't drop anything
 	private ArrayList<Integer> blocks_physics = new ArrayList<Integer>(Arrays.asList(12,13,88));						//sand gravel, soulsand fall
 	private ArrayList<Integer> blocks_last = new ArrayList<Integer>(Arrays.asList(6,18,26,27,28,31,32,37,38,39,40,50,55,59,63,64,65,66,68,69,70,71,72,75,76,77,81,83,93,94,96));  //blocks dependant on others. to put in last
 	private ArrayList<Integer> blocks_non_solid = new ArrayList<Integer>(Arrays.asList(0,6,8,9,26,27,28,30,31,37,38,39,40, 50,55,59,63,64,65,66,68,69,70,71,72,75,76,77,78,83,90,93,94,96));   //the player can breathe
@@ -83,8 +83,102 @@ public class CreeperHeal extends JavaPlugin {
 	String natural_only = "false";	//whitelist, blacklist or nothing
 	boolean teleport_block_per_block = true;
 	MobArenaHandler maHandler = null;
+	boolean drop_not_replaced = true;
+	int drop_chance = 100;
 
+	/**
+	 * Stores a list of dropped blocks for blocks.
+	 */
+	private static final Map<Integer,Integer> blockDrops = new HashMap<Integer,Integer>();
 
+	/**
+	 * Static constructor.
+	 */
+	static {
+		blockDrops.put(1, 4);
+		blockDrops.put(2, 3);
+		blockDrops.put(3, 3);
+		blockDrops.put(4, 4);
+		blockDrops.put(5, 5);
+		blockDrops.put(6, 6);
+		blockDrops.put(7, 0);
+		blockDrops.put(12, 12);
+		blockDrops.put(13, 13);
+		blockDrops.put(14, 14);
+		blockDrops.put(15, 15);
+		blockDrops.put(16, 16);
+		blockDrops.put(17, 17);
+		blockDrops.put(18, 18);
+		blockDrops.put(19, 19);
+		blockDrops.put(20, 20); // Have to drop glass for //undo
+		blockDrops.put(21, 21); // Block damage drops not implemented
+		blockDrops.put(22, 22);
+		blockDrops.put(23, 23);
+		blockDrops.put(24, 24);
+		blockDrops.put(25, 25);
+		blockDrops.put(26, 355);
+		blockDrops.put(27, 27);
+		blockDrops.put(28, 28);
+		blockDrops.put(30, 30);
+		blockDrops.put(34, 0);
+		blockDrops.put(35, 35);
+		blockDrops.put(36, 0);
+		blockDrops.put(37, 37);
+		blockDrops.put(38, 38);
+		blockDrops.put(39, 39);
+		blockDrops.put(40, 40);
+		blockDrops.put(41, 41);
+		blockDrops.put(42, 42);
+		blockDrops.put(43, 43);
+		blockDrops.put(44, 44);
+		blockDrops.put(45, 45);
+		blockDrops.put(47, 47);
+		blockDrops.put(48, 48);
+		blockDrops.put(49, 49);
+		blockDrops.put(50, 50);
+		blockDrops.put(53, 53);
+		blockDrops.put(54, 54);
+		blockDrops.put(55, 331);
+		blockDrops.put(56, 264);
+		blockDrops.put(57, 57);
+		blockDrops.put(58, 58);
+		blockDrops.put(59, 295);
+		blockDrops.put(60, 60);
+		blockDrops.put(61, 61);
+		blockDrops.put(62, 61);
+		blockDrops.put(63, 323);
+		blockDrops.put(64, 324);
+		blockDrops.put(65, 65);
+		blockDrops.put(66, 66);
+		blockDrops.put(67, 67);
+		blockDrops.put(68, 323);
+		blockDrops.put(69, 69);
+		blockDrops.put(70, 70);
+		blockDrops.put(71, 330);
+		blockDrops.put(72, 72);
+		blockDrops.put(73, 331);
+		blockDrops.put(74, 331);
+		blockDrops.put(75, 76);
+		blockDrops.put(76, 76);
+		blockDrops.put(77, 77);
+		blockDrops.put(78, 332);
+		blockDrops.put(80, 80);
+		blockDrops.put(81, 81);
+		blockDrops.put(82, 82);
+		blockDrops.put(83, 338);
+		blockDrops.put(84, 84);
+		blockDrops.put(85, 85);
+		blockDrops.put(86, 86);
+		blockDrops.put(87, 87);
+		blockDrops.put(88, 88);
+		blockDrops.put(89, 348);
+		blockDrops.put(91, 91);
+		blockDrops.put(92, 354);
+		blockDrops.put(93, 356);
+		blockDrops.put(94, 356);
+		blockDrops.put(95, 95);
+		blockDrops.put(96, 96);
+	}
 
 	public void onEnable() {
 		log = Logger.getLogger("Minecraft");
@@ -100,12 +194,12 @@ public class CreeperHeal extends JavaPlugin {
 		}
 
 		PluginManager pm = getServer().getPluginManager();		//registering the listeners
-		pm.registerEvent(Event.Type.ENTITY_EXPLODE, listener, Event.Priority.Monitor, this);
+		pm.registerEvent(Event.Type.ENTITY_EXPLODE, listener, Event.Priority.High, this);
 		pm.registerEvent(Event.Type.BLOCK_BURN, fire_listener, Event.Priority.Monitor, this);
 
 		PluginDescriptionFile pdfFile = this.getDescription();
 		setup_permissions();
-		
+
 		Plugin mobArena = getServer().getPluginManager().getPlugin("MobArena");
 		if(mobArena != null) {
 			maHandler = new MobArenaHandler();
@@ -351,6 +445,7 @@ public class CreeperHeal extends JavaPlugin {
 
 
 	public void recordBlocks(EntityExplodeEvent event) {		//record the list of blocks of an explosion, from bottom to top
+		event.setYield(0);
 		List<Block> list = event.blockList();			//the list declared by the explosion
 		List<BlockState> list_state = new ArrayList<BlockState>();		//the list of blockstate we'll be keeping afterward
 		List<Location> list_loc = new ArrayList<Location>();			//to check for duplicates
@@ -359,7 +454,7 @@ public class CreeperHeal extends JavaPlugin {
 				log_info("Explosion ignored, inside a mob arena", 2);
 				return;
 			}
-				
+
 		}
 		if(replace_tnt && event.getEntity() instanceof TNTPrimed) {			//to replace the tnt that just exploded
 			int x = (int) Math.floor(event.getLocation().getX());
@@ -372,96 +467,123 @@ public class CreeperHeal extends JavaPlugin {
 			list_loc.add(new Location(w,x,y,z));
 			w.getBlockAt(x, y, z).setTypeIdAndData(tmp_state.getTypeId(), tmp_state.getRawData(), false);		//set it back to what it was
 		}
-		
-		for(Block block : list){
-			if(block.getState() instanceof ContainerBlock) {		//save the inventory
-				chest_contents.put(block.getLocation(), ((ContainerBlock) block.getState()).getInventory().getContents().clone());
-				((ContainerBlock) block.getState()).getInventory().clear();
-			}
-			else if(block.getState() instanceof Sign) {				//save the text
-				sign_text.put(block.getLocation(), ((Sign)block.getState()).getLines());
-			}
-			else if(block.getState() instanceof NoteBlock) {
-				note_block.put(block.getLocation(), ((NoteBlock)(block.getState())).getRawNote());
-			}
-			else if(block.getState() instanceof CreatureSpawner) {
-				mob_spawner.put(block.getLocation(), ((CreatureSpawner)(block.getState())).getCreatureTypeId());
-			}
-			switch (block.getType()) {		
-			case IRON_DOOR :				//in case of a door or bed, only store one block to avoid dupes
-			case WOODEN_DOOR :
-				if(block.getData() < 8) {
-					list_state.add(block.getState());
-					list_loc.add(block.getLocation());
-					list_loc.add(block.getRelative(0, 1, 0).getLocation());		//but store both locations
-					block.setTypeIdAndData(0, (byte)0, false);
-				}
-				break;
-			case BED_BLOCK :
-				byte data = block.getData();
-				if(data < 8) {
-					list_state.add(block.getState());
-					list_loc.add(block.getLocation());
-					BlockFace face;
-					if(data == 0)			//facing the right way
-						face = BlockFace.WEST;
-					else if(data == 1)
-						face = BlockFace.NORTH;
-					else if(data == 2)
-						face = BlockFace.EAST;
-					else
-						face = BlockFace.SOUTH;
-					list_loc.add(block.getRelative(face).getLocation());
-					block.setTypeIdAndData(0, (byte)0, false);
-				}
-				break;
-			case AIR :						//don't store air 
-			case FIRE :						//or fire
-				break;
-			case TNT :						//allow for tnt to be stored if the setting is there
-				if(replace_tnt) {
-					list_state.add(block.getState());
-					list_loc.add(block.getLocation());
-					block.setTypeIdAndData(0, (byte)0, false);
-				}
-				break;
-			default :						//store the rest
-				list_state.add(block.getState());
-				list_loc.add(block.getLocation());
-				block.setTypeIdAndData(0, (byte)0, false);
-				break;
-			}
-		}
 
-		for(Block block : list) {			//go over a second time to check for torches, wire, or anything that would drop and store them
-			Block block_up = block.getRelative(BlockFace.UP);
-			if(blocks_last.contains(block_up.getTypeId()) && !list_loc.contains(block_up.getLocation())) {
-				if(block.getState() instanceof Sign) {				//save the text
+		for(Block block : list){
+			int type_id = block.getTypeId();
+			if((natural_only.equalsIgnoreCase("whitelist") && whitelist_natural.contains(type_id) 
+					|| (natural_only.equalsIgnoreCase("blacklist") && !blacklist_natural.contains(type_id) 
+							|| natural_only.equalsIgnoreCase("false")))) {
+
+				if(block.getState() instanceof ContainerBlock) {		//save the inventory
+					chest_contents.put(block.getLocation(), ((ContainerBlock) block.getState()).getInventory().getContents().clone());
+					((ContainerBlock) block.getState()).getInventory().clear();
+				}
+				else if(block.getState() instanceof Sign) {				//save the text
 					sign_text.put(block.getLocation(), ((Sign)block.getState()).getLines());
+				}
+				else if(block.getState() instanceof NoteBlock) {
+					note_block.put(block.getLocation(), ((NoteBlock)(block.getState())).getRawNote());
+				}
+				else if(block.getState() instanceof CreatureSpawner) {
+					mob_spawner.put(block.getLocation(), ((CreatureSpawner)(block.getState())).getCreatureTypeId());
 				}
 				switch (block.getType()) {		
 				case IRON_DOOR :				//in case of a door or bed, only store one block to avoid dupes
 				case WOODEN_DOOR :
-				case BED_BLOCK :
 					if(block.getData() < 8) {
 						list_state.add(block.getState());
+						list_loc.add(block.getLocation());
+						list_loc.add(block.getRelative(0, 1, 0).getLocation());		//but store both locations
+						block.setTypeIdAndData(0, (byte)0, false);
+					}
+					break;
+				case BED_BLOCK :
+					byte data = block.getData();
+					if(data < 8) {
+						list_state.add(block.getState());
+						list_loc.add(block.getLocation());
+						BlockFace face;
+						if(data == 0)			//facing the right way
+							face = BlockFace.WEST;
+						else if(data == 1)
+							face = BlockFace.NORTH;
+						else if(data == 2)
+							face = BlockFace.EAST;
+						else
+							face = BlockFace.SOUTH;
+						list_loc.add(block.getRelative(face).getLocation());
 						block.setTypeIdAndData(0, (byte)0, false);
 					}
 					break;
 				case AIR :						//don't store air 
+				case FIRE :						//or fire
 					break;
 				case TNT :						//allow for tnt to be stored if the setting is there
 					if(replace_tnt) {
 						list_state.add(block.getState());
+						list_loc.add(block.getLocation());
 						block.setTypeIdAndData(0, (byte)0, false);
 					}
 					break;
 				default :						//store the rest
 					list_state.add(block.getState());
+					list_loc.add(block.getLocation());
 					block.setTypeIdAndData(0, (byte)0, false);
 					break;
 				}
 			}
+			else if(drop_not_replaced){
+				Random generator = new Random();
+				if(generator.nextInt(100) < drop_chance)
+					dropBlock(type_id, block.getData(), block.getLocation());
+				
+			}
+		}
+
+		for(Block block : list) {			//go over a second time to check for torches, wire, or anything that would drop and store them
+			Block block_up = block.getRelative(BlockFace.UP);
+
+			int type_id = block_up.getTypeId();
+			if(blocks_last.contains(block_up.getTypeId()) && !list_loc.contains(block_up.getLocation())) {
+				if((natural_only.equalsIgnoreCase("whitelist") && whitelist_natural.contains(type_id) 
+						|| (natural_only.equalsIgnoreCase("blacklist") && !blacklist_natural.contains(type_id) 
+								|| natural_only.equalsIgnoreCase("false")))) {
+					if(block_up.getState() instanceof Sign) {				//save the text
+						sign_text.put(block_up.getLocation(), ((Sign)block_up.getState()).getLines());
+					}
+					switch (block_up.getType()) {		
+					case IRON_DOOR :				//in case of a door or bed, only store one block to avoid dupes
+					case WOODEN_DOOR :
+					case BED_BLOCK :
+						if(block_up.getData() < 8) {
+							list_state.add(block_up.getState());
+							block_up.setTypeIdAndData(0, (byte)0, false);
+						}
+						break;
+					case AIR :						//don't store air 
+						break;
+					case TNT :						//allow for tnt to be stored if the setting is there
+						if(replace_tnt) {
+							list_state.add(block_up.getState());
+							block_up.setTypeIdAndData(0, (byte)0, false);
+						}
+						break;
+					default :						//store the rest
+						list_state.add(block_up.getState());
+						block_up.setTypeIdAndData(0, (byte)0, false);
+						break;
+					}
+				}
+				else if(drop_not_replaced){
+					Random generator = new Random();
+					if(generator.nextInt(100) < drop_chance)
+						dropBlock(type_id, block.getData(), block.getLocation());
+					
+				}
+
+			}
+			
+
 		}
 
 		BlockState[] tmp_array = list_state.toArray(new BlockState[list_state.size()]);		//sort through an array, then store back in the list
@@ -504,561 +626,599 @@ public class CreeperHeal extends JavaPlugin {
 
 	}
 
-private void replace_one_block(List<BlockState> list) {		//replace one block (block per block)
+	private void replace_one_block(List<BlockState> list) {		//replace one block (block per block)
 
-	Iterator<BlockState> iter = list.iterator();
-	while(iter.hasNext()){		//finds the first block that is not dependent
-		BlockState block = iter.next();
-		if(!blocks_last.contains(block.getTypeId())){
-			replace_blocks(block);		//replace it
+		Iterator<BlockState> iter = list.iterator();
+		while(iter.hasNext()){		//finds the first block that is not dependent
+			BlockState block = iter.next();
+			if(!blocks_last.contains(block.getTypeId())){
+				replace_blocks(block);		//replace it
 				check_player_one_block(block.getBlock().getLocation());
 				log_info(block.getType().toString(), 3);
 				iter.remove();		//remove it
 				return;
-			
-		}
-	}
-	replace_blocks(list.get(0));		//only dependent blocks left, replace the first
-	check_player_one_block(list.get(0).getBlock().getLocation());
-	log_info(list.get(0).getType().toString(), 3);
-	list.remove(0);
-	
-}
 
-public void check_player_one_block(Location loc) {
-	if(teleport_block_per_block) {
-		Arrow entity = loc.getWorld().spawnArrow(loc, new Vector(0,0,0), 0, 0);
-		List<Entity> play_list = entity.getNearbyEntities(10, 10, 10);
-		entity.remove();
-		if(!play_list.isEmpty()) {
-			for(Entity en : play_list) {
-				if(en instanceof Player) {
-					check_player_suffocate((Player)en);
+			}
+		}
+		replace_blocks(list.get(0));		//only dependent blocks left, replace the first
+		check_player_one_block(list.get(0).getBlock().getLocation());
+		log_info(list.get(0).getType().toString(), 3);
+		list.remove(0);
+
+	}
+
+	public void check_player_one_block(Location loc) {
+		if(teleport_block_per_block) {
+			Arrow entity = loc.getWorld().spawnArrow(loc, new Vector(0,0,0), 0, 0);
+			List<Entity> play_list = Collections.synchronizedList(entity.getNearbyEntities(10, 10, 10));
+			entity.remove();
+			if(!play_list.isEmpty()) {
+				for(Entity en : play_list) {
+					if(en instanceof Player) {
+						check_player_suffocate((Player)en);
+					}
 				}
 			}
 		}
 	}
-}
-public void check_player_suffocate(Player player) {
-	log_info("checking player "+player.getName(),3);
-	int x = (int) Math.floor(player.getLocation().getX());		//get the player's coordinates in ints, to have the block he's standing on
-	int y = (int) Math.floor(player.getLocation().getY());
-	int z = (int) Math.floor(player.getLocation().getZ());
-	World w = player.getWorld();
-	if(!blocks_non_solid.contains(w.getBlockAt(x,y,z).getTypeId()) || !blocks_non_solid.contains(w.getBlockAt(x, y + 1, z).getTypeId())) {
-		log_info("player suffocating",2);
-		for(int k =1; k + y < 127; k++) {		//all the way to the sky, checks if there's some room up or around
+	public void check_player_suffocate(Player player) {
+		log_info("checking player "+player.getName(),3);
+		int x = (int) Math.floor(player.getLocation().getX());		//get the player's coordinates in ints, to have the block he's standing on
+		int y = (int) Math.floor(player.getLocation().getY());
+		int z = (int) Math.floor(player.getLocation().getZ());
+		World w = player.getWorld();
+		if(!blocks_non_solid.contains(w.getBlockAt(x,y,z).getTypeId()) || !blocks_non_solid.contains(w.getBlockAt(x, y + 1, z).getTypeId())) {
+			log_info("player suffocating",2);
+			for(int k =1; k + y < 127; k++) {		//all the way to the sky, checks if there's some room up or around
 
+				if(check_free(w, x, y+k, z, player))
+					break;
+
+				if(check_free_horizontal(w, x+k, y, z, player))
+					break;
+
+				if(check_free_horizontal(w, x-k, y, z, player))
+					break;
+
+				if(check_free_horizontal(w, x, y, z+k, player))
+					break;
+
+				if(check_free_horizontal(w, x, y, z-k, player))
+					break;
+
+			}
+
+		}
+
+	}
+
+
+	public void force_replace(long since) {		//force replacement of all the explosions since x seconds
+		Date now = new Date();
+
+		Iterator<Date> iterator = map.keySet().iterator();
+		while(iterator.hasNext()) {
+			Date time = iterator.next();
+			if(new Date(time.getTime() + since).after(now) || since == 0) {		//if the explosion happened since x seconds
+				replace_blocks(map.get(time));
+				iterator.remove();
+				log_info("Blocks replaced!", 2);
+			}
+		}
+		if(since == 0) 
+			replace_burnt(true);
+	}
+
+
+	private void replace_blocks(List<BlockState> list) {	//replace all the blocks in the given list
+		while(!list.isEmpty()){			//replace all non-physics non-dependent blocks
+			Iterator<BlockState> iter = list.iterator();
+			while (iter.hasNext()){
+				BlockState block = iter.next();
+				if(!blocks_physics.contains(block.getTypeId()) && !blocks_last.contains(block.getTypeId())){
+					block_state_replace(block);
+					iter.remove();
+				}
+			}
+			iter = list.iterator();
+			while (iter.hasNext()){		//then all physics
+				BlockState block = iter.next();
+				if(blocks_physics.contains(block.getTypeId())){
+					block_state_replace(block);
+					iter.remove();
+				}
+			}
+			iter = list.iterator();
+			while (iter.hasNext()){		//lastly all dependent
+				BlockState block = iter.next();
+				if(blocks_last.contains(block.getTypeId())){
+					block_state_replace(block);
+					iter.remove();
+				}
+			}
+		}
+		if(teleport_on_suffocate) {			//checks for players suffocating anywhere
+			Player[] player_list = getServer().getOnlinePlayers();
+			for(Player player : player_list) {
+				check_player_suffocate(player);
+			}
+		}
+
+	}
+
+
+
+	private boolean check_free_horizontal(World w, double x, double y, double z, Player player) {		//checks one up and down, to broaden the scope
+		for(int k = -1; k<2; k++){
 			if(check_free(w, x, y+k, z, player))
-				break;
-
-			if(check_free_horizontal(w, x+k, y, z, player))
-				break;
-
-			if(check_free_horizontal(w, x-k, y, z, player))
-				break;
-
-			if(check_free_horizontal(w, x, y, z+k, player))
-				break;
-
-			if(check_free_horizontal(w, x, y, z-k, player))
-				break;
-
+				return true;  //found a spot
 		}
-
+		return false;
 	}
 
-}
-
-
-public void force_replace(long since) {		//force replacement of all the explosions since x seconds
-	Date now = new Date();
-
-	Iterator<Date> iterator = map.keySet().iterator();
-	while(iterator.hasNext()) {
-		Date time = iterator.next();
-		if(new Date(time.getTime() + since).after(now) || since == 0) {		//if the explosion happened since x seconds
-			replace_blocks(map.get(time));
-			iterator.remove();
-			log_info("Blocks replaced!", 2);
+	private boolean check_free(World w, double x, double y, double z, Player player) {
+		if(blocks_non_solid.contains(w.getBlockAt(new Location(w, x, y, z)).getTypeId()) && blocks_non_solid.contains(w.getBlockAt(new Location(w, x, y + 1, z)).getTypeId()) && !blocks_non_solid.contains(w.getBlockAt(new Location(w, x, y-1, z)).getTypeId())) {
+			Location loc = new Location(w, x+0.5, y, z+0.5);
+			loc.setYaw(player.getLocation().getYaw());
+			player.teleport(loc);			//if there's ground under and space to breathe, put the player there
+			return true;
 		}
-	}
-	if(since == 0) 
-		replace_burnt(true);
-}
-
-
-private void replace_blocks(List<BlockState> list) {	//replace all the blocks in the given list
-	while(!list.isEmpty()){			//replace all non-physics non-dependent blocks
-		Iterator<BlockState> iter = list.iterator();
-		while (iter.hasNext()){
-			BlockState block = iter.next();
-			if(!blocks_physics.contains(block.getTypeId()) && !blocks_last.contains(block.getTypeId())){
-				block_state_replace(block);
-					iter.remove();
-			}
-		}
-		iter = list.iterator();
-		while (iter.hasNext()){		//then all physics
-			BlockState block = iter.next();
-			if(blocks_physics.contains(block.getTypeId())){
-				block_state_replace(block);
-					iter.remove();
-			}
-		}
-		iter = list.iterator();
-		while (iter.hasNext()){		//lastly all dependent
-			BlockState block = iter.next();
-			if(blocks_last.contains(block.getTypeId())){
-				block_state_replace(block);
-					iter.remove();
-			}
-		}
-	}
-	if(teleport_on_suffocate) {			//checks for players suffocating anywhere
-		Player[] player_list = getServer().getOnlinePlayers();
-		for(Player player : player_list) {
-			check_player_suffocate(player);
-		}
+		return false;
 	}
 
-}
-
-
-
-private boolean check_free_horizontal(World w, double x, double y, double z, Player player) {		//checks one up and down, to broaden the scope
-	for(int k = -1; k<2; k++){
-		if(check_free(w, x, y+k, z, player))
-			return true;  //found a spot
+	private void replace_blocks(BlockState block) {		//if there's just one block, no need to go over all this
+		block_state_replace(block);
 	}
-	return false;
-}
-
-private boolean check_free(World w, double x, double y, double z, Player player) {
-	if(blocks_non_solid.contains(w.getBlockAt(new Location(w, x, y, z)).getTypeId()) && blocks_non_solid.contains(w.getBlockAt(new Location(w, x, y + 1, z)).getTypeId()) && !blocks_non_solid.contains(w.getBlockAt(new Location(w, x, y-1, z)).getTypeId())) {
-		Location loc = new Location(w, x+0.5, y, z+0.5);
-		loc.setYaw(player.getLocation().getYaw());
-		player.teleport(loc);			//if there's ground under and space to breathe, put the player there
-		return true;
-	}
-	return false;
-}
-
-private void replace_blocks(BlockState block) {		//if there's just one block, no need to go over all this
-	block_state_replace(block);
-}
 
 
-//replaces a single block, first sort
-public void block_state_replace(BlockState block){
-	/*BlockFace dependentFace = getDependentBlock(block);
+	//replaces a single block, first sort
+	public void block_state_replace(BlockState block){
+		/*BlockFace dependentFace = getDependentBlock(block);
 	if(dependentFace != BlockFace.SELF && blocks_non_solid.contains(block.getBlock().getFace(dependentFace).getTypeId())){
 		return false;
 	}*/
-	if (block.getType() == Material.WOODEN_DOOR || block.getType() == Material.IRON_DOOR_BLOCK) {		//if it's a door, put the bottom then the top (which is unrecorded)
-		block_replace(block.getBlock(), block.getTypeId(), block.getRawData());
-		block_replace(block.getBlock().getFace(BlockFace.UP), block.getTypeId(), (byte)(block.getRawData() + 8));
-	}
-	else if(block.getType() == Material.BED_BLOCK) {		//put the head, then the feet
-		byte data = block.getRawData();
-		try{
-			block.getBlock().setTypeIdAndData(block.getTypeId(), data, false);		//head
+		if (block.getType() == Material.WOODEN_DOOR || block.getType() == Material.IRON_DOOR_BLOCK) {		//if it's a door, put the bottom then the top (which is unrecorded)
+			block_replace(block.getBlock(), block.getTypeId(), block.getRawData());
+			block_replace(block.getBlock().getFace(BlockFace.UP), block.getTypeId(), (byte)(block.getRawData() + 8));
 		}
-		catch(IndexOutOfBoundsException e) {
-			log_info(e.getLocalizedMessage(), 1);
-		}
-		BlockFace face;
-		if(data == 0)			//facing the right way
-			face = BlockFace.WEST;
-		else if(data == 1)
-			face = BlockFace.NORTH;
-		else if(data == 2)
-			face = BlockFace.EAST;
-		else
-			face = BlockFace.SOUTH;
-		block_replace(block.getBlock().getFace(face), block.getTypeId(), (byte)(data + 8));    //feet
-	}
-	else if(block.getType() == Material.PISTON_MOVING_PIECE) {			//extended piston, you have to put a base instead (and it comes out unextended)
-		log_info("Piston_moving_piece", 2);
-		block_replace(block.getBlock(), (block.getRawData() >7)?Material.PISTON_STICKY_BASE.getId():Material.PISTON_BASE.getId(), (byte)(block.getRawData() + 8));
-
-	}
-	else {		//rest of it, just normal
-		block_replace(block.getBlock(), block.getTypeId(), block.getRawData());
-	}
-	//return true;
-
-}
-//actual replacement method
-public void block_replace(Block block, int type_id, byte rawData) {
-	int block_id = block.getTypeId();		//id of the block in the world, before it is replaced
-
-	if(!blocks_no_drop.contains(block_id) && drop_blocks_replaced) {		//drop an item in the spot
-		block.getWorld().dropItemNaturally(block.getLocation(), new ItemStack(block_id, 1, block.getData()));
-	}
-	if((natural_only.equalsIgnoreCase("whitelist") && whitelist_natural.contains(type_id) 
-			|| (natural_only.equalsIgnoreCase("blacklist") && !blacklist_natural.contains(type_id) 
-					|| natural_only.equalsIgnoreCase("false")))){			//if the block is to be replaced
-		try {
-			if(blocks_physics.contains(block_id)) {			//if the spot for the sand is occupied, put it in the first free spot above
-				for(int k = 1; block.getY() + k < 127; k++) {
-					if(block.getRelative(0,k,0) != null) {
-						if(block.getRelative(0, k, 0).getTypeId() == 0) {
-							block.getRelative(0, k, 0).setTypeIdAndData(block_id, (byte)0, false);
-							break;
-						}
-					}
-					else		//should not be thrown, maybe at the upper limit of the map?
-						log.warning("block.getRelative(0,"+k+", 0) is null?? Y: "+(block.getY()+k));
-				}
-			}
-			else
-				block.setTypeIdAndData(type_id, rawData, false);		//replace the block
-		}
-		catch(IndexOutOfBoundsException e) {
-			log_info(e.getLocalizedMessage(), 1);
-		}
-
-		if(block.getState() instanceof ContainerBlock) {			//if it's a chest, put the inventory back
-			((ContainerBlock) block.getState()).getInventory().setContents(chest_contents.get(new Location(block.getWorld(), block.getX(), block.getY(), block.getZ())));
-			block.getState().update();
-			chest_contents.remove(new Location(block.getWorld(), block.getX(), block.getY(), block.getZ()));
-		}
-		else if(block.getState() instanceof Sign) {					//if it's a sign... no I'll let you guess
-			log_info("replacing sign_text",2);
-			int k = 0;
-
-			for(String line : sign_text.get(new Location(block.getWorld(), block.getX(), block.getY(), block.getZ()))) {
-				((Sign) block.getState()).setLine(k, line);
-				k++;
-			}
-			sign_text.remove(new Location(block.getWorld(), block.getX(), block.getY(), block.getZ()));
-
-		}
-		else if(block.getState() instanceof NoteBlock) {					//if it's a sign... no I'll let you guess
-			((NoteBlock)block.getState()).setRawNote(note_block.get(block.getLocation()));
-			block.getState().update();
-			note_block.remove(block.getLocation());
-		}
-		else if(block.getState() instanceof CreatureSpawner) {					//if it's a sign... no I'll let you guess
-			((CreatureSpawner)block.getState()).setCreatureTypeId(mob_spawner.get(block.getLocation()));
-			block.getState().update();
-			mob_spawner.remove(block.getLocation());
-		}
-
-	}
-
-}
-
-public void record_burn(Block block) {			//record a burnt block
-	if(block.getType() != Material.TNT) {		//unless it's TNT triggered by fire
-		Date now = new Date();
-		map_burn.put(now, block.getState());
-		BlockState block_up = block.getFace(BlockFace.UP).getState();
-		if(blocks_last.contains(block_up.getTypeId())) {		//the block above is a dependent block, store it, but one interval after
-			map_burn.put(new Date(now.getTime() + burn_interval*1000), block_up);
-			if(block_up instanceof Sign) {				//as a side note, chests don't burn, but signs are dependent
-				sign_text.put(new Location(block_up.getWorld(), block_up.getX(), block_up.getY(), block_up.getZ()), ((Sign)block_up).getLines());
-			}
+		else if(block.getType() == Material.BED_BLOCK) {		//put the head, then the feet
+			byte data = block.getRawData();
 			try{
-				block_up.getBlock().setTypeIdAndData(0, (byte)0, false);
+				block.getBlock().setTypeIdAndData(block.getTypeId(), data, false);		//head
 			}
 			catch(IndexOutOfBoundsException e) {
 				log_info(e.getLocalizedMessage(), 1);
 			}
+			BlockFace face;
+			if(data == 0)			//facing the right way
+				face = BlockFace.WEST;
+			else if(data == 1)
+				face = BlockFace.NORTH;
+			else if(data == 2)
+				face = BlockFace.EAST;
+			else
+				face = BlockFace.SOUTH;
+			block_replace(block.getBlock().getFace(face), block.getTypeId(), (byte)(data + 8));    //feet
+		}
+		else if(block.getType() == Material.PISTON_MOVING_PIECE) {			//extended piston, you have to put a base instead (and it comes out unextended)
+			log_info("Piston_moving_piece", 2);
+			block_replace(block.getBlock(), (block.getRawData() >7)?Material.PISTON_STICKY_BASE.getId():Material.PISTON_BASE.getId(), (byte)(block.getRawData() + 8));
+
+		}
+		else {		//rest of it, just normal
+			block_replace(block.getBlock(), block.getTypeId(), block.getRawData());
+		}
+		//return true;
+
+	}
+	//actual replacement method
+	public void block_replace(Block block, int type_id, byte rawData) {
+		int block_id = block.getTypeId();		//id of the block in the world, before it is replaced
+
+		if(drop_blocks_replaced) {		//drop an item in the spot
+			dropBlock(type_id, rawData, block.getLocation());
+		}
+		if((natural_only.equalsIgnoreCase("whitelist") && whitelist_natural.contains(type_id) 
+				|| (natural_only.equalsIgnoreCase("blacklist") && !blacklist_natural.contains(type_id) 
+						|| natural_only.equalsIgnoreCase("false")))){			//if the block is to be replaced
+			try {
+				if(blocks_physics.contains(block_id)) {			//if the spot for the sand is occupied, put it in the first free spot above
+					for(int k = 1; block.getY() + k < 127; k++) {
+						if(block.getRelative(0,k,0) != null) {
+							if(block.getRelative(0, k, 0).getTypeId() == 0) {
+								block.getRelative(0, k, 0).setTypeIdAndData(block_id, (byte)0, false);
+								break;
+							}
+						}
+						else		//should not be thrown, maybe at the upper limit of the map?
+							log.warning("block.getRelative(0,"+k+", 0) is null?? Y: "+(block.getY()+k));
+					}
+				}
+				else
+					block.setTypeIdAndData(type_id, rawData, false);		//replace the block
+			}
+			catch(IndexOutOfBoundsException e) {
+				log_info(e.getLocalizedMessage(), 1);
+			}
+
+			if(block.getState() instanceof ContainerBlock) {			//if it's a chest, put the inventory back
+				((ContainerBlock) block.getState()).getInventory().setContents(chest_contents.get(new Location(block.getWorld(), block.getX(), block.getY(), block.getZ())));
+				block.getState().update();
+				chest_contents.remove(new Location(block.getWorld(), block.getX(), block.getY(), block.getZ()));
+			}
+			else if(block.getState() instanceof Sign) {					//if it's a sign... no I'll let you guess
+				log_info("replacing sign_text",2);
+				int k = 0;
+
+				for(String line : sign_text.get(new Location(block.getWorld(), block.getX(), block.getY(), block.getZ()))) {
+					((Sign) block.getState()).setLine(k, line);
+					k++;
+				}
+				sign_text.remove(new Location(block.getWorld(), block.getX(), block.getY(), block.getZ()));
+
+			}
+			else if(block.getState() instanceof NoteBlock) {					//if it's a sign... no I'll let you guess
+				((NoteBlock)block.getState()).setRawNote(note_block.get(block.getLocation()));
+				block.getState().update();
+				note_block.remove(block.getLocation());
+			}
+			else if(block.getState() instanceof CreatureSpawner) {					//if it's a sign... no I'll let you guess
+				((CreatureSpawner)block.getState()).setCreatureTypeId(mob_spawner.get(block.getLocation()));
+				block.getState().update();
+				mob_spawner.remove(block.getLocation());
+			}
+
+		}
+
+	}
+
+	public void record_burn(Block block) {			//record a burnt block
+		if(block.getType() != Material.TNT) {		//unless it's TNT triggered by fire
+			Date now = new Date();
+			map_burn.put(now, block.getState());
+			BlockState block_up = block.getFace(BlockFace.UP).getState();
+			if(blocks_last.contains(block_up.getTypeId())) {		//the block above is a dependent block, store it, but one interval after
+				map_burn.put(new Date(now.getTime() + burn_interval*1000), block_up);
+				if(block_up instanceof Sign) {				//as a side note, chests don't burn, but signs are dependent
+					sign_text.put(new Location(block_up.getWorld(), block_up.getX(), block_up.getY(), block_up.getZ()), ((Sign)block_up).getLines());
+				}
+				try{
+					block_up.getBlock().setTypeIdAndData(0, (byte)0, false);
+				}
+				catch(IndexOutOfBoundsException e) {
+					log_info(e.getLocalizedMessage(), 1);
+				}
+			}
 		}
 	}
-}
 
-public void replace_burnt(boolean force) {		//checks for burnt blocks to replace, with an override for onDisable()
-	Date[] keyset = map_burn.keySet().toArray(new Date[map_burn.keySet().size()]);
+	public void replace_burnt(boolean force) {		//checks for burnt blocks to replace, with an override for onDisable()
+		Date[] keyset = map_burn.keySet().toArray(new Date[map_burn.keySet().size()]);
 
-	Date now = new Date();
-	for(Date time : keyset) {
-		if((new Date(time.getTime() + burn_interval * 1000).before(now)) || force) {		//if enough time went by
-			BlockState block = map_burn.get(time);
-			if(blocks_last.contains(block.getTypeId())) {
-				if(blocks_non_solid.contains(block.getBlock().getFace(BlockFace.DOWN).getTypeId()) && !force) {		//if it's a dependent, and there's nothing under, store it for later
-					map_burn.remove(time);
-					map_burn.put(new Date(time.getTime() + burn_interval*1000), block);
+		Date now = new Date();
+		for(Date time : keyset) {
+			if((new Date(time.getTime() + burn_interval * 1000).before(now)) || force) {		//if enough time went by
+				BlockState block = map_burn.get(time);
+				if(blocks_last.contains(block.getTypeId())) {
+					if(blocks_non_solid.contains(block.getBlock().getFace(BlockFace.DOWN).getTypeId()) && !force) {		//if it's a dependent, and there's nothing under, store it for later
+						map_burn.remove(time);
+						map_burn.put(new Date(time.getTime() + burn_interval*1000), block);
+					}
+					else {
+						replace_blocks(block); 		//replace the block as there's something under
+						map_burn.remove(time);
+					}
 				}
 				else {
-					replace_blocks(block); 		//replace the block as there's something under
+					replace_blocks(block);		//replace the non-dependent block
 					map_burn.remove(time);
 				}
 			}
-			else {
-				replace_blocks(block);		//replace the non-dependent block
-				map_burn.remove(time);
-			}
 		}
 	}
-}
 
 
-public void log_info(String msg, int min_level) {		//logs a message, according to the log_level
-	if(min_level<=log_level)
-		log.info("[CreeperHeal] "+msg);
-}
+	public void log_info(String msg, int min_level) {		//logs a message, according to the log_level
+		if(min_level<=log_level)
+			log.info("[CreeperHeal] "+msg);
+	}
 
-public BlockFace getDependentBlock(BlockState block) {
-	int id = block.getTypeId();
-	byte data = block.getRawData();
-	if(data > 7)
-		data -= 8;
-	if(id == 50 || id == 75 || id == 76 || id==69) {
-		switch (data) {
-		case 1:
-			return BlockFace.NORTH;
-		case 2:
-			return BlockFace.SOUTH;
-		case 3: 
-			return BlockFace.EAST;
-		case 4: 
-			return BlockFace.WEST;
-		case 5:
+	public BlockFace getDependentBlock(BlockState block) {
+		int id = block.getTypeId();
+		byte data = block.getRawData();
+		if(data > 7)
+			data -= 8;
+		if(id == 50 || id == 75 || id == 76 || id==69) {
+			switch (data) {
+			case 1:
+				return BlockFace.NORTH;
+			case 2:
+				return BlockFace.SOUTH;
+			case 3: 
+				return BlockFace.EAST;
+			case 4: 
+				return BlockFace.WEST;
+			case 5:
+				return BlockFace.DOWN;
+			case 6:
+				return BlockFace.DOWN;
+			}
+		}
+		else if(id == 6 || id==26 || id==27 || id==28 || id==31 || id==32 || id == 37 || id == 38 || id==39 || id==40 || id == 55 || id == 59 || id == 63 || id == 64 || id == 66 || id==70 || id == 71 || id == 72 || id == 78 || id == 92 || id == 93 || id == 94 ) {
 			return BlockFace.DOWN;
-		case 6:
-			return BlockFace.DOWN;
 		}
-	}
-	else if(id == 6 || id==26 || id==27 || id==28 || id==31 || id==32 || id == 37 || id == 38 || id==39 || id==40 || id == 55 || id == 59 || id == 63 || id == 64 || id == 66 || id==70 || id == 71 || id == 72 || id == 78 || id == 92 || id == 93 || id == 94 ) {
-		return BlockFace.DOWN;
-	}
-	else if(id == 65 || id==77 || id==96) {
-		switch(data) {
-		case 2:
-			return BlockFace.WEST;
-		case 3:
-			return BlockFace.EAST;
-		case 4:
-			return BlockFace.SOUTH;
-		case 5: 
-			return BlockFace.NORTH;
-		}
-	}
-	else if(id==68){
-		switch(data){
-		case 2:
-			return BlockFace.EAST;
-		case 3: 
-			return BlockFace.WEST;
-		case 4:
-			return BlockFace.NORTH;
-		case 5:
-			return BlockFace.SOUTH;
-		}
-	}
-	return BlockFace.SELF;
-}
-
-
-
-private void loadConfig(){			//reads the config
-	int interval_date;
-	try {
-		interval_date = getConfiguration().getInt("interval", 60);		//tries to read the value directly from the config
-	}
-	catch (Exception e) {		//wrong value, not an integer
-		log.warning("[CreeperHeal] Wrong value for interval field. Defaulting to 1 minute");
-		interval_date = 60;
-	}
-	interval = new Date(interval_date*1000);
-
-	try {
-		log_level = getConfiguration().getInt("log-level", 0);
-	}
-	catch (Exception e) {
-		log.warning("[CreeperHeal] Wrong values for log-level field. Defaulting to 0.");
-	}
-
-	try {
-		creeper = getConfiguration().getBoolean("Creepers", true);
-	}
-	catch (Exception e) {
-		log.warning("[CreeperHeal] Wrong values for Creepers field. Defaulting to true.");
-	}
-
-	try {
-		tnt = getConfiguration().getBoolean("TNT", true);
-	}
-	catch (Exception e) {
-		log.warning("[CreeperHeal] Wrong values for TNT field. Defaulting to false.");
-	}
-
-	try{
-		natural_only = getConfiguration().getString("replace-natural-only", "false").trim();
-	}
-	catch (Exception e) {
-		log.warning("[CreeperHeal] Wrong values for replace-natural-only field. Defaulting to false.");
-		log_info(e.getLocalizedMessage(), 1);
-		natural_only = "false";
-	}		//if not a valid value
-	if(!natural_only.equalsIgnoreCase("false") && !natural_only.equalsIgnoreCase("whitelist") && !natural_only.equalsIgnoreCase("blacklist")) {
-		log.warning("[CreeperHeal] Wrong values for replace-natural-only field. Defaulting to false.");
-		natural_only = "false";
-	}
-
-	whitelist_natural  = new ArrayList<Integer>();
-	try{
-		String tmp_str = getConfiguration().getString("natural-blocks-whitelist", "").trim();
-		if(tmp_str.split(",")!=null){		//split the list into single strings of integer
-			for(String elem : tmp_str.split(",")) {
-				whitelist_natural.add(Integer.parseInt(elem.trim()));
+		else if(id == 65 || id==77 || id==96) {
+			switch(data) {
+			case 2:
+				return BlockFace.WEST;
+			case 3:
+				return BlockFace.EAST;
+			case 4:
+				return BlockFace.SOUTH;
+			case 5: 
+				return BlockFace.NORTH;
 			}
 		}
-		else
-			log_info("[CreeperHeal] Empty white-list", 1);
-	}
-	catch (Exception e) {
-		log.warning("[CreeperHeal] Wrong values for natural-blocks-whitelist field.");
-	}
-
-	blacklist_natural = new ArrayList<Integer>();
-	try{
-		String tmp_str = getConfiguration().getString("natural-blocks-blacklist", "").trim();
-		if(tmp_str.split(",")!=null){
-			for(String elem : tmp_str.split(",")) {
-				blacklist_natural.add(Integer.parseInt(elem.trim()));
+		else if(id==68){
+			switch(data){
+			case 2:
+				return BlockFace.EAST;
+			case 3: 
+				return BlockFace.WEST;
+			case 4:
+				return BlockFace.NORTH;
+			case 5:
+				return BlockFace.SOUTH;
 			}
 		}
-		else
-			log_info("[CreeperHeal] Empty black-list", 1);
-	}
-	catch (Exception e) {
-		log.warning("[CreeperHeal] Wrong values for natural-blocks-blacklist field.");
+		return BlockFace.SELF;
 	}
 
-	try{
-		drop_blocks_replaced = getConfiguration().getBoolean("drop-replaced-blocks", true);
-	}
-	catch (Exception e) {
-		log.warning("[CreeperHeal] Wrong values for drop-replaced-blocks field. Defaulting to true.");
+	private void dropBlock(int type_id, short data, Location loc) {
+		if(blockDrops.containsKey(type_id)){
+			int type_drop = blockDrops.get(type_id);
+			if(type_drop != 0) {
+				int number_drops = 1;
+				Random generator = new Random();
+				if(type_drop == 351 && data == 4)
+					number_drops = generator.nextInt(5) + 4;
+				else if(type_drop == 331)
+					number_drops = generator.nextInt(2) + 4;
+				else if(type_drop == 337)
+					number_drops = 4;
+				else if(type_drop == 348)
+					number_drops = generator.nextInt(3) + 2;
+
+				loc.getWorld().dropItemNaturally(loc, new ItemStack(type_drop, number_drops, data));
+			}
+		}
+
 	}
 
-	try{
-		block_per_block = getConfiguration().getBoolean("block-per-block", true);
-	}
-	catch (Exception e) {
-		log.warning("[CreeperHeal] Wrong values for block-per-block field. Defaulting to true.");
-	}
 
-	try{
-		teleport_on_suffocate = getConfiguration().getBoolean("teleport-on-suffocate", true);
-	}
-	catch (Exception e) {
-		log.warning("[CreeperHeal] Wrong values for teleport-on-suffocate field. Defaulting to true.");
-	}
+	private void loadConfig(){			//reads the config
+		int interval_date;
+		try {
+			interval_date = getConfiguration().getInt("interval", 60);		//tries to read the value directly from the config
+		}
+		catch (Exception e) {		//wrong value, not an integer
+			log.warning("[CreeperHeal] Wrong value for interval field. Defaulting to 1 minute");
+			interval_date = 60;
+		}
+		interval = new Date(interval_date*1000);
 
-	try{
-		teleport_block_per_block = getConfiguration().getBoolean("teleport-on-suffocate-block-per-block", true);
-	}
-	catch (Exception e) {
-		log.warning("[CreeperHeal] Wrong values for teleport-on-suffocate-block-per-block field. Defaulting to true.");
-	}
+		try {
+			log_level = getConfiguration().getInt("log-level", 0);
+		}
+		catch (Exception e) {
+			log.warning("[CreeperHeal] Wrong values for log-level field. Defaulting to 0.");
+		}
 
-	try{
-		replace_burn = getConfiguration().getBoolean("replace-burnt-blocks", true);
-	}
-	catch (Exception e) {
-		log.warning("[CreeperHeal] Wrong values for replace-burnt-blocks field. Defaulting to true.");
-	}
+		try {
+			creeper = getConfiguration().getBoolean("Creepers", true);
+		}
+		catch (Exception e) {
+			log.warning("[CreeperHeal] Wrong values for Creepers field. Defaulting to true.");
+		}
 
-	try {
-		burn_interval = getConfiguration().getInt("burn-interval", 45);
-	}
-	catch (Exception e) {
-		log.warning("[CreeperHeal] Wrong values for burn-interval field. Defaulting to 45.");
-	}
+		try {
+			tnt = getConfiguration().getBoolean("TNT", true);
+		}
+		catch (Exception e) {
+			log.warning("[CreeperHeal] Wrong values for TNT field. Defaulting to false.");
+		}
 
-	try{
-		replace_tnt = getConfiguration().getBoolean("replace-tnt", false);
-	}
-	catch (Exception e) {
-		log.warning("[CreeperHeal] Wrong values for replace-tnt field. Defaulting to false.");
-	}
+		try{
+			natural_only = getConfiguration().getString("replace-natural-only", "false").trim();
+		}
+		catch (Exception e) {
+			log.warning("[CreeperHeal] Wrong values for replace-natural-only field. Defaulting to false.");
+			log_info(e.getLocalizedMessage(), 1);
+			natural_only = "false";
+		}		//if not a valid value
+		if(!natural_only.equalsIgnoreCase("false") && !natural_only.equalsIgnoreCase("whitelist") && !natural_only.equalsIgnoreCase("blacklist")) {
+			log.warning("[CreeperHeal] Wrong values for replace-natural-only field. Defaulting to false.");
+			natural_only = "false";
+		}
 
-	try{
-		replace_ghast = getConfiguration().getBoolean("replace-ghast-fireballs", true);
-	}
-	catch (Exception e) {
-		log.warning("[CreeperHeal] Wrong values for replace-ghast-fireballs field. Defaulting to true.");
-	}
+		whitelist_natural  = new ArrayList<Integer>();
+		try{
+			String tmp_str = getConfiguration().getString("natural-blocks-whitelist", "").trim();
+			if(tmp_str.split(",")!=null){		//split the list into single strings of integer
+				for(String elem : tmp_str.split(",")) {
+					whitelist_natural.add(Integer.parseInt(elem.trim()));
+				}
+			}
+			else
+				log_info("[CreeperHeal] Empty white-list", 1);
+		}
+		catch (Exception e) {
+			log.warning("[CreeperHeal] Wrong values for natural-blocks-whitelist field.");
+		}
 
-	try{
-		replace_other = getConfiguration().getBoolean("replace-magic-explosions", false);
-	}
-	catch (Exception e) {
-		log.warning("[CreeperHeal] Wrong values for replace-magic-explosions field. Defaulting to false.");
-	}
-}
+		blacklist_natural = new ArrayList<Integer>();
+		try{
+			String tmp_str = getConfiguration().getString("natural-blocks-blacklist", "").trim();
+			if(tmp_str.split(",")!=null){
+				for(String elem : tmp_str.split(",")) {
+					blacklist_natural.add(Integer.parseInt(elem.trim()));
+				}
+			}
+			else
+				log_info("[CreeperHeal] Empty black-list", 1);
+		}
+		catch (Exception e) {
+			log.warning("[CreeperHeal] Wrong values for natural-blocks-blacklist field.");
+		}
 
-public void setup_permissions() {		//permissions stuff
+		try{
+			drop_blocks_replaced = getConfiguration().getBoolean("drop-replaced-blocks", true);
+		}
+		catch (Exception e) {
+			log.warning("[CreeperHeal] Wrong values for drop-replaced-blocks field. Defaulting to true.");
+		}
 
-	Plugin test = this.getServer().getPluginManager().getPlugin("Permissions");
+		try{
+			block_per_block = getConfiguration().getBoolean("block-per-block", true);
+		}
+		catch (Exception e) {
+			log.warning("[CreeperHeal] Wrong values for block-per-block field. Defaulting to true.");
+		}
 
-	if(Permissions == null) {
-		if(test != null) {
-			Permissions = ((Permissions)test).getHandler();
+		try{
+			teleport_on_suffocate = getConfiguration().getBoolean("teleport-on-suffocate", true);
+		}
+		catch (Exception e) {
+			log.warning("[CreeperHeal] Wrong values for teleport-on-suffocate field. Defaulting to true.");
+		}
+
+		try{
+			teleport_block_per_block = getConfiguration().getBoolean("teleport-on-suffocate-block-per-block", true);
+		}
+		catch (Exception e) {
+			log.warning("[CreeperHeal] Wrong values for teleport-on-suffocate-block-per-block field. Defaulting to true.");
+		}
+
+		try{
+			replace_burn = getConfiguration().getBoolean("replace-burnt-blocks", true);
+		}
+		catch (Exception e) {
+			log.warning("[CreeperHeal] Wrong values for replace-burnt-blocks field. Defaulting to true.");
+		}
+
+		try {
+			burn_interval = getConfiguration().getInt("burn-interval", 45);
+		}
+		catch (Exception e) {
+			log.warning("[CreeperHeal] Wrong values for burn-interval field. Defaulting to 45.");
+		}
+
+		try{
+			replace_tnt = getConfiguration().getBoolean("replace-tnt", false);
+		}
+		catch (Exception e) {
+			log.warning("[CreeperHeal] Wrong values for replace-tnt field. Defaulting to false.");
+		}
+
+		try{
+			replace_ghast = getConfiguration().getBoolean("replace-ghast-fireballs", true);
+		}
+		catch (Exception e) {
+			log.warning("[CreeperHeal] Wrong values for replace-ghast-fireballs field. Defaulting to true.");
+		}
+
+		try{
+			replace_other = getConfiguration().getBoolean("replace-magic-explosions", false);
+		}
+		catch (Exception e) {
+			log.warning("[CreeperHeal] Wrong values for replace-magic-explosions field. Defaulting to false.");
+		}
+
+		try{
+			drop_not_replaced = getConfiguration().getBoolean("drop-not-replaced", true);
+		}
+		catch (Exception e) {
+			log.warning("[CreeperHeal] Wrong values for drop_not_replaced field. Defaulting to true.");
+		}
+
+		try {
+			drop_chance = getConfiguration().getInt("drop-chance", 100);
+		}
+		catch (Exception e) {
+			log.warning("[CreeperHeal] Wrong values for drop_chance field. Defaulting to 100.");
 		}
 	}
-}
 
-public void config_write(){			//write the config to a file, with the values used, or the default ones
-	File yml = new File(getDataFolder()+"/config.yml");
+	public void setup_permissions() {		//permissions stuff
 
-	new File(getDataFolder().toString()).mkdir();
-	try {
-		yml.createNewFile();
+		Plugin test = this.getServer().getPluginManager().getPlugin("Permissions");
+
+		if(Permissions == null) {
+			if(test != null) {
+				Permissions = ((Permissions)test).getHandler();
+			}
+		}
 	}
-	catch (IOException ex) {
-		log.warning("[CreeperHeal] Cannot create file "+yml.getPath());
-	}
-	try {
-		BufferedWriter out = new BufferedWriter(new FileWriter(yml, true));
+
+	public void config_write(){			//write the config to a file, with the values used, or the default ones
+		File yml = new File(getDataFolder()+"/config.yml");
+
+		new File(getDataFolder().toString()).mkdir();
+		try {
+			yml.createNewFile();
+		}
+		catch (IOException ex) {
+			log.warning("[CreeperHeal] Cannot create file "+yml.getPath());
+		}
+		try {
+			BufferedWriter out = new BufferedWriter(new FileWriter(yml, true));
 
 
-		out.write("Creepers: "+Boolean.toString(creeper)+"    #replaces Creeper damage");
-		out.newLine();
-		out.write("TNT: "+Boolean.toString(tnt)+"    #replaces TNT damage");
-		out.newLine();
-		out.write("replace-ghast-fireballs: "+Boolean.toString(replace_ghast)+"       #replace damage done by ghast fireballs");
-		out.newLine();
-		out.write("replace-magic-explosions: "+Boolean.toString(replace_other)+"        #replace damage done by other causes");
-		out.newLine();
-		out.write("interval: "+(interval.getTime()/1000)+"      #in seconds, how long you have to wait before the damage starts getting repaired");
-		out.newLine();
-		out.write("block-per-block: "+Boolean.toString(block_per_block)+"        #Replaces one block at a time given the block-interval, or the whole explosion after the interval");
-		out.newLine();
-		out.write("block-interval: "+block_interval+"     #in ticks, 1/20th of a second, rate of replacement for explosions. Also frequency of check for fire block replacement");
-		out.newLine();
-		out.write("replace-burnt-blocks: "+Boolean.toString(replace_burn)+"       #If true, replaces the blocks burnt after burnt_interval");
-		out.newLine();
-		out.write("burn-interval: "+burn_interval+"        #in seconds, how long you have to wait before the blocks burnt are replaced");
-		out.newLine();
-		out.write("replace-natural-only: "+natural_only+"    #replace only natural blocks. Can be false, whitelist or blacklist");
-		out.newLine();
-		out.write("natural-blocks-whitelist: "+whitelist_natural.toString().substring(1, whitelist_natural.toString().length()-1)+"    #Blocks that will get replaced if replace-natural-only is set to whitelist");
-		out.newLine();
-		out.write("natural-blocks-blacklist: "+blacklist_natural.toString().substring(1, blacklist_natural.toString().length()-1)+"        #Blocks that will not get replaced if replace-natural-only is set to blacklist");
-		out.newLine();
-		out.write("refresh-frequency: "+period+"      #in seconds, how often it should check for explosions to be replaced, if block-per-block is set to false");
-		out.newLine();
-		out.write("drop-replaced-blocks: "+Boolean.toString(drop_blocks_replaced)+"      #gives back a drop when you place a block in an area to be healed");
-		out.newLine();
-		out.write("teleport-on-suffocate: "+Boolean.toString(teleport_on_suffocate)+"     #Teleport players out of explosions being healed if they suffocate (not for block_per_block)");
-		out.newLine();
-		out.write("teleport-on-suffocate-block-per-block: "+Boolean.toString(teleport_block_per_block)+"     #Teleport players out of explosions being healed if they suffocate (for block_per_block)");
-		out.newLine();
-		out.write("replace-tnt: "+Boolean.toString(replace_tnt)+"     #whether exploding tnt should be replaced or not");
-		out.newLine();
-		out.write("log-level: "+log_level+"      #0-3 0:silent, 3:verbose. Recommended:1");
-		//Close the output stream
-		out.close();
+			out.write("Creepers: "+Boolean.toString(creeper)+"    #replaces Creeper damage");
+			out.newLine();
+			out.write("TNT: "+Boolean.toString(tnt)+"    #replaces TNT damage");
+			out.newLine();
+			out.write("replace-ghast-fireballs: "+Boolean.toString(replace_ghast)+"       #replace damage done by ghast fireballs");
+			out.newLine();
+			out.write("replace-magic-explosions: "+Boolean.toString(replace_other)+"        #replace damage done by other causes");
+			out.newLine();
+			out.write("interval: "+(interval.getTime()/1000)+"      #in seconds, how long you have to wait before the damage starts getting repaired");
+			out.newLine();
+			out.write("block-per-block: "+Boolean.toString(block_per_block)+"        #Replaces one block at a time given the block-interval, or the whole explosion after the interval");
+			out.newLine();
+			out.write("block-interval: "+block_interval+"     #in ticks, 1/20th of a second, rate of replacement for explosions. Also frequency of check for fire block replacement");
+			out.newLine();
+			out.write("replace-burnt-blocks: "+Boolean.toString(replace_burn)+"       #If true, replaces the blocks burnt after burnt_interval");
+			out.newLine();
+			out.write("burn-interval: "+burn_interval+"        #in seconds, how long you have to wait before the blocks burnt are replaced");
+			out.newLine();
+			out.write("replace-natural-only: "+natural_only+"    #replace only natural blocks. Can be false, whitelist or blacklist");
+			out.newLine();
+			out.write("natural-blocks-whitelist: "+whitelist_natural.toString().substring(1, whitelist_natural.toString().length()-1)+"    #Blocks that will get replaced if replace-natural-only is set to whitelist");
+			out.newLine();
+			out.write("natural-blocks-blacklist: "+blacklist_natural.toString().substring(1, blacklist_natural.toString().length()-1)+"        #Blocks that will not get replaced if replace-natural-only is set to blacklist");
+			out.newLine();
+			out.write("refresh-frequency: "+period+"      #in seconds, how often it should check for explosions to be replaced, if block-per-block is set to false");
+			out.newLine();
+			out.write("drop-replaced-blocks: "+Boolean.toString(drop_blocks_replaced)+"      #gives back a drop when you place a block in an area to be healed");
+			out.newLine();
+			out.write("teleport-on-suffocate: "+Boolean.toString(teleport_on_suffocate)+"     #Teleport players out of explosions being healed if they suffocate (not for block_per_block)");
+			out.newLine();
+			out.write("teleport-on-suffocate-block-per-block: "+Boolean.toString(teleport_block_per_block)+"     #Teleport players out of explosions being healed if they suffocate (for block_per_block)");
+			out.newLine();
+			out.write("replace-tnt: "+Boolean.toString(replace_tnt)+"     #whether exploding tnt should be replaced or not");
+			out.newLine();
+			out.write("log-level: "+log_level+"      #0-3 0:silent, 3:verbose. Recommended:1");
+			out.newLine();
+			out.write("drop-not-replaced: "+drop_not_replaced+"         #Drop items for blocks destroyed but which will not be replaced (white/blacklist)");
+			out.newLine();
+			out.write("drop-chance: "+drop_chance+"      #0-100  Percentage of chance for blocks being dropped when destroyed and not replaced (see above)");
+			//Close the output stream
+			out.close();
+		}
+		catch (Exception e) {
+			log.warning("[CreeperHeal] Cannot write config file: "+e);
+		}
 	}
-	catch (Exception e) {
-		log.warning("[CreeperHeal] Cannot write config file: "+e);
-	}
-}
 
 }
