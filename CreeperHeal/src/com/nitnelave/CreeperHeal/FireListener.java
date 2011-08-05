@@ -10,15 +10,19 @@ public class FireListener extends BlockListener{
 
 	private static CreeperHeal plugin;
 
-	
+
 	public FireListener(CreeperHeal instance)
 	{
 		plugin = instance;
 
 	}
-	
-	public void onBlockBurn(BlockBurnEvent event) {		//no need to check for the setting, the listener only gets declared if it is set to true
-		plugin.record_burn(event.getBlock());
+
+	public void onBlockBurn(BlockBurnEvent event) {        //no need to check for the setting, the listener only gets declared if it is set to true
+		WorldConfig world = plugin.world_config.get( event.getBlock().getLocation().getWorld().getName());
+
+		if(world.fire)
+			plugin.record_burn(event.getBlock());
 	}
-	
+
+
 }
