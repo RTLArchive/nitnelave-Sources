@@ -1,0 +1,74 @@
+------------------------------------------------------
+INSTALLATION
+------------------------------------------------------
+
+Just drop the CreeperHeal.jar in your plugins folder, and the configuration file will be automatically generated.
+
+------------------------------------------------------
+CONFIGURATION
+------------------------------------------------------
+
+wait-before-heal : how long after the explosion the damage is repaired (or starts getting repaired for block per block), in seconds.
+replacement-method : (block-per-block or all-at-once)
+block-per-block-interval : in ticks (1/20th of a second), how long between each block is replaced (set it to 10 for 2 blocks per second)
+wait-after-fire : how long after a block is destroyed by fire (burnt) it gets replaced, in seconds
+refresh-frequency : how often it should check for explosions to heal. Increase if the plugin is causing lag. In seconds.
+drop-replaced-block : (true or false) if healing an area is overwriting some blocks, they are dropped to the ground is true.
+drop-not-replaced-block : (true or false) Whether blacklisted blocks should drop items as for a normal explosion or not, configurable with a chance.
+drop-chance : (0 - 100) If setting above is true, chance that the block drops.
+teleport-on-suffocate : (true or false) If a player is caught in an explosion being healed and is to suffocate, teleport him above or to the side, to safety.
+log-level : (0 - 3) Amount of debugging messages shown. 1 is recommended.
+
+
+Per world :
+
+- Creepers : (true or false) replace damage done by creepers exploding
+
+- TNT : (true or false) same for TNT
+
+- Ghast : (true or false) same for ghast fireballs
+
+- Magical : (true or false) same for explosions from other sources (other plugins?)
+    - Fire : (true or false) replace damage done by fire
+
+- restrict-blocks : (false, whitelist or blacklist) Set to false to replace all blocks, whitelist to replace only the blocks defined in the whitelist, or blacklist to ignore those defined in the blacklist.
+
+- restrict-list : (list of block ID separated by commas) whitelist (or blacklist, depending on the setting above)
+
+- replace-tnt : (true or false) Wether exploding TNT should be replaced or not.
+
+
+------------------------------------------------------
+TRAPS
+------------------------------------------------------
+
+Traps are TNT blocks that are automatically replaced along with their explosion's damage. Thus, the trap is reset. It allows for hidden TNT behind a wall, or pressure plates under the snow... Feel free to experiment!
+
+1. Set up a trap.
+
+Set a TNT block wherever you want. Look at it and type "/ch trap create". You should have sufficient permission for that (either of those nodes : CreeperHeal.* CreeperHeal.trap.* CreeperHeal.trap.create). Now, whenever this block explodes, it will pop back along with the rest of the blocks destroyed. And it is protected from getting destroyed by angry players!
+
+2. Remove a trap.
+
+If you are the owner of a trap, it's simple. Either look at it and type "/ch trap remove" or simply destroy it! You should of course have at least the node CreeperHeal.trap.remove.own, or CreeperHeal.trap.remove.all, or any of the wildcard (*) nodes.
+If you're not the owner of the block, same procedure, but not the same permissions. This time you HAVE to have CreeperHeal.trap.remove.all, or any of the wildcard nodes.
+
+------------------------------------------------------
+COMMANDS
+------------------------------------------------------
+
+    /CreeperHeal (or/ch) is the main command/help menu.
+    /ch reload : reloads the config from the file.
+    /ch creeper (on|off) (world) : toggles the creeper explosion replacement (can be used with on/off)
+    /ch TNT (on|off) (world : same thing for TNT
+    /ch interval [seconds] : Sets the interval before an explosion is replaced to x seconds
+    /ch heal (seconds) (world) : Heals all explosions in the last x seconds, or all explosions if not specified. Alias : /ch forceHeal
+    /ch healBurnt (seconds) (world): Heal all burnt blocks since x seconds, or all if x is not specified.
+    /ch fire (on|off) (world): toggles whether or not to replace fire damage
+    /ch burnInterval [seconds] : Sets the interval before a block burnt is replaced
+    /ch Ghast (on|off) (world): toggle Ghast fireballs explosions replacement
+    /ch magical (on|off) (world): same thing for "magical" explosions (from other plugins).
+    /ch trap (create|delete) : creates/removes a trap (auto-replacing tnt block).
+
+
+

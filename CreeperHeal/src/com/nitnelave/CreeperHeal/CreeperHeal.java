@@ -622,7 +622,7 @@ public class CreeperHeal extends JavaPlugin {
 			map.get(date).add(block.getState());                //record it
 
 
-			block.setTypeIdAndData(tmp_state.getTypeId(), tmp_state.getRawData(), false);        //set it back to what it was
+			tmp_state.update(true);        //set it back to what it was
 			
 			iter.remove();
 		}
