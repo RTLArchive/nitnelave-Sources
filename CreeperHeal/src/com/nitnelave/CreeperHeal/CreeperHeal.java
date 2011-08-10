@@ -94,6 +94,7 @@ public class CreeperHeal extends JavaPlugin {
 
 	private static HashSet<Byte> transparent_blocks = null;
 
+	private boolean opEnforce = true;
 
 
 	/**
@@ -1023,7 +1024,7 @@ public class CreeperHeal extends JavaPlugin {
 	private void loadConfig(){            //reads the config
 
 		interval = configInt("wait-before-heal", 60);        //tries to read the value directly from the config
-		log_level = configInt("log-level", 0);
+		log_level = configInt("log-level", 1);
 
 		drop_blocks_replaced = configBoolean("drop-replaced-blocks", true);
 
@@ -1039,7 +1040,7 @@ public class CreeperHeal extends JavaPlugin {
 			tmp_str = "block-per-block";
 		}
 		if(!tmp_str.equalsIgnoreCase("all-at-once") && !tmp_str.equalsIgnoreCase("block-per-block"));
-		log.warning("[CreeperHeal] Wrong value for replacement method field. Defaulting to block-per-block.");
+			log.warning("[CreeperHeal] Wrong value for replacement method field. Defaulting to block-per-block.");
 		block_per_block = (tmp_str.equalsIgnoreCase("all-at-once"))?false:true;
 
 		teleport_on_suffocate = configBoolean("teleport-on-suffocate", true);
@@ -1049,6 +1050,8 @@ public class CreeperHeal extends JavaPlugin {
 		drop_not_replaced = configBoolean("drop-not-replaced-block", true);
 
 		drop_chance = configInt("drop-chance", 100);
+		
+		opEnforce = configBoolean("op-permissions", true);
 
 		world_config.clear();
 		for(World w : getServer().getWorlds()) {
@@ -1067,7 +1070,7 @@ public class CreeperHeal extends JavaPlugin {
 
 			try{
 
-				restrict_blocks = getConfiguration().getString("restrict-blocks", "false").trim();
+				restrict_blocks = getConfiguration().getString(name + ".restrict-blocks", "false").trim();
 
 			}
 
@@ -1181,7 +1184,7 @@ public class CreeperHeal extends JavaPlugin {
 
 		config.load();
 
-		config.setProperty("wait-before-heal", (int) interval/1000);
+		config.setProperty("wait-before-heal", (int) interval);
 		config.setProperty("replacement-method", block_per_block ? "block-per-block" : "all-at-once");
 		config.setProperty("block-per-block-interval", block_interval);
 		config.setProperty("wait-after-fire", burn_interval);
@@ -1191,6 +1194,7 @@ public class CreeperHeal extends JavaPlugin {
 		config.setProperty("drop-chance", drop_chance);
 		config.setProperty("teleport-on-suffocate", teleport_on_suffocate);
 		config.setProperty("log-level", log_level);
+		config.setProperty("op-permissions", opEnforce);
 
 
 		for(WorldConfig w : world_config.values()) {
@@ -1209,16 +1213,20 @@ public class CreeperHeal extends JavaPlugin {
 	}
 
 	public boolean checkPermissions(String node, Player player) {
+		boolean tmp_bool;
 		if (Permissions != null) {
-			boolean tmp_bool =  Permissions.has(player, node) || Permissions.has(player, "CreeperHeal.*");
+			tmp_bool =  Permissions.has(player, node) || Permissions.has(player, "CreeperHeal.*");
 
-			if(tmp_bool == false)
+			if(!tmp_bool && opEnforce)
 
 				return player.isOp();
 
 			return tmp_bool;
 		} else {
-			return (player.hasPermission(node) || player.hasPermission("CreeperHeal.*"));
+			tmp_bool = (player.hasPermission(node) || player.hasPermission("CreeperHeal.*"));
+			if(!tmp_bool && opEnforce)
+				return player.isOp();
+			return tmp_bool;
 		}
 	}
 
@@ -1280,7 +1288,7 @@ public class CreeperHeal extends JavaPlugin {
 			trap_location.put(args[0], args[1]);
 			count++;
 		}
-		log.info("[CreeperHeal] Loaded " + count + "traps");
+		log.info("[CreeperHeal] Loaded " + count + " traps");
 	}
 
 	public String locToString(Location loc) {

@@ -18,6 +18,7 @@ drop-not-replaced-block : (true or false) Whether blacklisted blocks should drop
 drop-chance : (0 - 100) If setting above is true, chance that the block drops.
 teleport-on-suffocate : (true or false) If a player is caught in an explosion being healed and is to suffocate, teleport him above or to the side, to safety.
 log-level : (0 - 3) Amount of debugging messages shown. 1 is recommended.
+op-permissions : OP have all permissions.
 
 
 Per world :
