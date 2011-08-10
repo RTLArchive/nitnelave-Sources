@@ -327,9 +327,12 @@ public class CreeperHeal extends JavaPlugin {
 				else if(!(sender instanceof Player))
 					sender.sendMessage("Player only command");
 			}
+			else if(cmd.equalsIgnoreCase("reload"))
+				loadConfig();
+			else if(cmd.equalsIgnoreCase("help"))
+				sendHelp(sender);
 			else {        // /ch something gets back to the help
-				sender.sendMessage("CreeperHeal -- heals explosions damage");
-				sender.sendMessage("/ch [trap|heal|Creeper|TNT|interval|dropReplaced|fire|burnInterval|ghast|magical|healBurnt]");
+				sender.sendMessage("/ch help");
 				return true;
 			}
 
@@ -338,17 +341,59 @@ public class CreeperHeal extends JavaPlugin {
 			config_write();
 		}
 		else {
-			sender.sendMessage("CreeperHeal -- heals explosions damage");
-			sender.sendMessage("/ch [trap|heal|Creeper|TNT|interval|dropReplaced|fire|burnInterval|ghast|magical|healBurnt]");
+			sender.sendMessage("/ch help");
 			return true;
 		}
 
 		return true;
 	}
 
+	private void sendHelp(CommandSender sender) {
+		sender.sendMessage("CreeperHeal -- Repair explosions damage and make traps");
+		sender.sendMessage("--------------------------------------------");
+		String green = ChatColor.GREEN.toString();
+		String purple = ChatColor.DARK_PURPLE.toString();
+		boolean admin = true;
+		boolean heal = true;
+		boolean trap = true;
+		
+		if(sender instanceof Player){
+			Player player = (Player) sender;
+			admin = checkPermissions("admin", player);
+			heal = checkPermissions("heal", player);
+			trap = checkPermissions("trap.create", player) || checkPermissions("trap.*", player);
+		}
+		
+		if(!(admin || heal || trap))
+			sender.sendMessage(purple + "You do not have access to any of the CreeperHeal commands");
+		
+		if(admin){
+			sender.sendMessage(green + "/ch reload :" + purple + " reloads the config from the file.");
+			sender.sendMessage(green + "/ch creeper (on|off) (world) :" + purple + " toggles creeper explosion replacement");
+			sender.sendMessage(green + "/ch TNT (on|off) (world) :" + purple + " same for TNT");
+			sender.sendMessage(green + "/ch Ghast (on|off) (world) :" + purple + " same for Ghast fireballs");
+			sender.sendMessage(green + "/ch magical (on|off) :" + purple + " same for \"magical\" explosions.");
+			sender.sendMessage(green + "/ch fire (on|off) (world) :" + purple + " same for fire");
+			sender.sendMessage(green + "/ch interval [seconds] :" + purple + " Sets the interval before an explosion is replaced to x seconds");
+			sender.sendMessage(green + "/ch burnInterval [seconds] :" + purple + " Sets the interval before a block burnt is replaced to x seconds");
+		}
+		
+		if(heal || admin){
+			sender.sendMessage(green + "/ch heal (seconds) (world) :" + purple + " Heals all explosions in the last x seconds, or all if x is not specified.");
+			sender.sendMessage(green + "/ch healBurnt (seconds) (world) :" + purple + " Heal all burnt blocks since x seconds, or all if x is not specified.");
+		}
+		
+		if(trap){
+			sender.sendMessage(green + "/ch trap (create|delete) :" + purple + " creates/removes a trap from the tnt block in front of you.");
+		}
+				
+		
+	}
+
+
 	private boolean booleanCmd(boolean current, String[] args, String msg, CommandSender sender) {
 		if(sender instanceof Player) {
-			if(!checkPermissions("CreeperHeal.admin", (Player)sender)) {
+			if(!checkPermissions("admin", (Player)sender)) {
 				sender.sendMessage(ChatColor.RED + "You don’t have the permission");
 				return current;
 			}
@@ -373,7 +418,7 @@ public class CreeperHeal extends JavaPlugin {
 
 	private int integerCmd(int current, String[] args, String msg, CommandSender sender) {
 		if(sender instanceof Player) {
-			if(!checkPermissions("CreeperHeal.admin", (Player) sender)) {
+			if(!checkPermissions("admin", (Player) sender)) {
 				sender.sendMessage(ChatColor.RED + "You don’t have the permission");
 				return current;
 			}
@@ -403,7 +448,7 @@ public class CreeperHeal extends JavaPlugin {
 		String cmd = args[0];
 
 		if(sender instanceof Player) {
-			if(!checkPermissions("CreeperHeal.heal", (Player)sender) && !checkPermissions("CreeperHeal.admin", (Player)sender)) {
+			if(!checkPermissions("heal", (Player)sender) && !checkPermissions("admin", (Player)sender)) {
 				sender.sendMessage(ChatColor.RED + "You don’t have the permission");
 				return;
 			}
@@ -492,8 +537,9 @@ public class CreeperHeal extends JavaPlugin {
 
 		for(Block block : list){
 			int type_id = block.getTypeId();
-			if((world.restrict_blocks.equalsIgnoreCase("whitelist") && world.block_list.contains(type_id)
-					|| (world.restrict_blocks.equalsIgnoreCase("blacklist") && !world.block_list.contains(type_id)
+			byte data = block.getData();
+			if((world.restrict_blocks.equalsIgnoreCase("whitelist") && world.block_list.contains(new BlockId(type_id, data))
+					|| (world.restrict_blocks.equalsIgnoreCase("blacklist") && !world.block_list.contains(new BlockId(type_id, data))
 							|| world.restrict_blocks.equalsIgnoreCase("false")))) {
 
 				if(block.getState() instanceof ContainerBlock) {        //save the inventory
@@ -520,7 +566,6 @@ public class CreeperHeal extends JavaPlugin {
 					}
 					break;
 				case BED_BLOCK :
-					byte data = block.getData();
 					if(data < 8) {
 						list_state.add(block.getState());
 						list_loc.add(block.getLocation());
@@ -560,9 +605,10 @@ public class CreeperHeal extends JavaPlugin {
 			Block block_up = block.getRelative(BlockFace.UP);
 
 			int type_id = block_up.getTypeId();
+			byte data = block.getData();
 			if(blocks_last.contains(type_id)) {
-				if((world.restrict_blocks.equalsIgnoreCase("whitelist") && world.block_list.contains(type_id)
-						|| (world.restrict_blocks.equalsIgnoreCase("blacklist") && !world.block_list.contains(type_id)
+				if((world.restrict_blocks.equalsIgnoreCase("whitelist") && world.block_list.contains(new BlockId(type_id, data))
+						|| (world.restrict_blocks.equalsIgnoreCase("blacklist") && !world.block_list.contains(new BlockId(type_id, data))
 								|| world.restrict_blocks.equalsIgnoreCase("false")))) {
 					if(block_up.getState() instanceof Sign) {                //save the text
 						sign_text.put(block_up.getLocation(), ((Sign)block_up.getState()).getLines());
@@ -1039,7 +1085,7 @@ public class CreeperHeal extends JavaPlugin {
 			log_info(e.getLocalizedMessage(), 1);
 			tmp_str = "block-per-block";
 		}
-		if(!tmp_str.equalsIgnoreCase("all-at-once") && !tmp_str.equalsIgnoreCase("block-per-block"));
+		if(!tmp_str.equalsIgnoreCase("all-at-once") && !tmp_str.equalsIgnoreCase("block-per-block"))
 			log.warning("[CreeperHeal] Wrong value for replacement method field. Defaulting to block-per-block.");
 		block_per_block = (tmp_str.equalsIgnoreCase("all-at-once"))?false:true;
 
@@ -1092,17 +1138,19 @@ public class CreeperHeal extends JavaPlugin {
 
 			}
 
-			ArrayList<Integer> restrict_list  = new ArrayList<Integer>();
+			ArrayList<BlockId> restrict_list  = new ArrayList<BlockId>();
 
 			try{
 
 				String tmp_str1 = getConfiguration().getString(name + ".restrict-list", "").trim();
+				
+				String[] split = tmp_str1.split(",");
 
-				if(tmp_str1.split(",")!=null){        //split the list into single strings of integer
+				if(split!=null){        //split the list into single strings of integer
 
-					for(String elem : tmp_str1.split(",")) {
+					for(String elem : split) {
 
-						restrict_list.add(Integer.parseInt(elem.trim()));
+						restrict_list.add(new BlockId(elem));
 
 					}
 
@@ -1120,7 +1168,7 @@ public class CreeperHeal extends JavaPlugin {
 
 				restrict_list.clear();
 
-				restrict_list.add(0);
+				restrict_list.add(new BlockId(0));
 
 			}
 
@@ -1214,6 +1262,7 @@ public class CreeperHeal extends JavaPlugin {
 
 	public boolean checkPermissions(String node, Player player) {
 		boolean tmp_bool;
+		node = "CreeperHeal." + node;
 		if (Permissions != null) {
 			tmp_bool =  Permissions.has(player, node) || Permissions.has(player, "CreeperHeal.*");
 
@@ -1318,7 +1367,7 @@ public class CreeperHeal extends JavaPlugin {
 	}
 
 	private void createTrap(Player player) {
-		if(checkPermissions("CreeperHeal.trap.create", player) || checkPermissions("CreeperHeal.trap.*", player)) {
+		if(checkPermissions("trap.create", player) || checkPermissions("trap.*", player)) {
 
 			Block block = player.getTargetBlock(transparent_blocks, 10);
 			if(block.getType() == Material.TNT) {
@@ -1340,10 +1389,10 @@ public class CreeperHeal extends JavaPlugin {
 	}
 
 	public boolean deleteTrap(Player player) {
-		boolean delete_own, delete_all = checkPermissions("CreeperHeal.trap.remove.all", player) || checkPermissions("CreeperHeal.trap.*", player);
+		boolean delete_own, delete_all = checkPermissions("trap.remove.all", player) || checkPermissions("trap.*", player);
 		delete_own = delete_all;
 		if(!delete_own)
-			delete_own = checkPermissions("CreeperHeal.trap.remove.own", player);
+			delete_own = checkPermissions("trap.remove.own", player);
 		if(delete_own) {
 
 			Block block = player.getTargetBlock(transparent_blocks, 10);

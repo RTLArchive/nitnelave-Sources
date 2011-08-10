@@ -61,7 +61,7 @@ COMMANDS
     /CreeperHeal (or/ch) is the main command/help menu.
     /ch reload : reloads the config from the file.
     /ch creeper (on|off) (world) : toggles the creeper explosion replacement (can be used with on/off)
-    /ch TNT (on|off) (world : same thing for TNT
+    /ch TNT (on|off) (world) : same thing for TNT
     /ch interval [seconds] : Sets the interval before an explosion is replaced to x seconds
     /ch heal (seconds) (world) : Heals all explosions in the last x seconds, or all explosions if not specified. Alias : /ch forceHeal
     /ch healBurnt (seconds) (world): Heal all burnt blocks since x seconds, or all if x is not specified.
