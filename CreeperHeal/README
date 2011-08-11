@@ -35,6 +35,7 @@ Per world :
 - restrict-blocks : (false, whitelist or blacklist) Set to false to replace all blocks, whitelist to replace only the blocks defined in the whitelist, or blacklist to ignore those defined in the blacklist.
 
 - restrict-list : (list of block ID separated by commas) whitelist (or blacklist, depending on the setting above)
+		Example, to block dirt, all types of wood, normal logs and birch logs : 3, 35, 17:0, 17:2
 
 - replace-tnt : (true or false) Wether exploding TNT should be replaced or not.
 
