@@ -422,8 +422,9 @@ public class DispenserReFill extends JavaPlugin {
 
 
           if(container instanceof Chest && fillid == 0){ //if it's a chest, but there was no item inside, look for a double chest
-                ContainerBlock chest = (ContainerBlock) (scanForNeighborChest(block).getState());
-                if(chest != null){
+                Block chest_block = (scanForNeighborChest(block));
+                if(chest_block != null){
+                	ContainerBlock chest = (ContainerBlock) (chest_block.getState());
                     for(ItemStack itemstack : chest.getInventory().getContents()) { //get the first item in the container
                         if(itemstack!=null) {
                             fillid = itemstack.getTypeId();
@@ -735,14 +736,14 @@ public class DispenserReFill extends JavaPlugin {
                     out.close();
                 }
                 catch (IOException e) {
-                    log.warning("[DispenserReFill] Cannot write refill file: "+e);
+                    log.warning("[DispenserReFill] Cannot write refill file: "+e.getStackTrace());
                 }
 
             }
 
         }
         catch(Exception e) {
-            log.warning("[DispenserReFill] Could not scan refill file: "+e);
+            log.warning("[DispenserReFill] Could not scan refill file: "+e.getStackTrace());
         }
 
 
