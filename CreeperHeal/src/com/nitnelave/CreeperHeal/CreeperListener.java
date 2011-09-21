@@ -33,9 +33,13 @@ public class CreeperListener extends EntityListener{
 
 					recordBlocks(event, world);            //record the blocks destroyed
 
-				else if(entity instanceof TNTPrimed && world.tnt)                 //tnt
-
-					recordBlocks(event, world);
+				else if(entity instanceof TNTPrimed && (world.tnt /*|| plugin.isTrap(entity)*/))                 //tnt -- it checks if it's a trap.
+					if(world.replaceAbove){
+						if(plugin.isAbove(entity, world.replaceLimit))
+							recordBlocks(event, world);
+					}
+					else
+						recordBlocks(event, world);
 
 				else if(entity instanceof Fireball && world.ghast)         //fireballs (shot by ghasts)
 

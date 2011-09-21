@@ -73,7 +73,7 @@ public class CreeperHeal extends JavaPlugin {
 	private ArrayList<Integer> blocks_last = new ArrayList<Integer>(Arrays.asList(6,18,26,27,28,31,32,37,38,39,40,50,55,59,63,64,65,66,68,69,70,71,72,75,76,77,81,83,93,94,96));  //blocks dependent on others. to put in last
 	private ArrayList<Integer> blocks_non_solid = new ArrayList<Integer>(Arrays.asList(0,6,8,9,26,27,28,30,31,37,38,39,40, 50,55,59,63,64,65,66,68,69,70,71,72,75,76,77,78,83,90,93,94,96));   //the player can breathe
 	//private ArrayList<Integer> attachable_blocks = new ArrayList<Integer>(Arrays.asList(50, 68, 69, 75, 76, 77));
-	private String[] world_config_nodes = {"Creepers", "TNT", "Ghast", "Magical", "Fire", "restrict-blocks", "restrict-list", "replace-tnt"};
+	private String[] world_config_nodes = {"Creepers", "TNT", "Ghast", "Magical", "Fire", "restrict-blocks", "restrict-list", "replace-tnt", "replace-above-only", "replace-limit"};
 	boolean drop_blocks_replaced = true;        //drop items when blocks are overwritten
 	public static PermissionHandler Permissions = null;    //permission stuff
 	int period = 20;        //frenquency to check for blocks to replace, in sec.
@@ -95,6 +95,7 @@ public class CreeperHeal extends JavaPlugin {
 	private static HashSet<Byte> transparent_blocks = null;
 
 	private boolean opEnforce = true;
+	private boolean cracked = false;
 
 
 	/**
@@ -199,6 +200,7 @@ public class CreeperHeal extends JavaPlugin {
 		File yml = new File(getDataFolder()+"/config.yml");
 
 		if (!yml.exists()) {
+			log.warning("[CreeperHeal] Config file not found, creating default.");
 			config_write();        //write the config with the default values.
 		}
 
@@ -510,14 +512,11 @@ public class CreeperHeal extends JavaPlugin {
 		}
 		if(event.getEntity() instanceof TNTPrimed) {            //to replace the tnt that just exploded
 			Entity entity = event.getEntity();
-			Block block;
-			/*if((DateLoc dateLoc = tnt_location.get(entity)) != null) */
-
-			DateLoc dateLoc = tnt_location.get(entity);
-			block = dateLoc.getLocation().getBlock();
-			/*else
-                block = entity.getLocation().getBlock();*/
+			Block block = tnt_location.get(entity).getLocation().getBlock();
+			
+			log_info("explosion at " + block.getX() + ";" + block.getY() + ";" + block.getZ(), 1);
 			if(world.replace_tnt || isTrap(block)) {
+				log_info("trap exploded", 1);
 				
 				trapToAdd.put(now, block);
 				
@@ -584,8 +583,18 @@ public class CreeperHeal extends JavaPlugin {
 					break;
 				case AIR :                        //don't store air
 				case FIRE :                        //or fire
-				case TNT :                        //tnt is already stored when exploding.
+				case PISTON_EXTENSION :
 					break;
+				case TNT :
+					if(isTrap(block) || world_config.get(block.getWorld().getName()).replace_tnt){
+						list_state.add(block.getState());
+						list_loc.add(block.getLocation());
+					}
+					break;
+				case SMOOTH_BRICK :
+				case BRICK_STAIRS :
+					if(cracked  && block.getData() == (byte)0)
+						block.setData((byte) 2);
 				default :                        //store the rest
 					list_state.add(block.getState());
 					list_loc.add(block.getLocation());
@@ -846,6 +855,7 @@ public class CreeperHeal extends JavaPlugin {
 		if(blocks_non_solid.contains(block.getTypeId()) && blocks_non_solid.contains(block.getRelative(0, 1, 0).getTypeId()) && !blocks_non_solid.contains(block.getRelative(0, -1, 0).getTypeId())) {
 			Location loc = new Location(w, x+0.5, y, z+0.5);
 			loc.setYaw(player.getLocation().getYaw());
+			loc.setPitch(player.getLocation().getPitch());
 			player.teleport(loc);            //if there's ground under and space to breathe, put the player there
 			return true;
 		}
@@ -882,8 +892,8 @@ public class CreeperHeal extends JavaPlugin {
 			block_replace(block.getBlock().getRelative(face), block.getTypeId(), (byte)(data + 8));    //feet
 		}
 		else if(block.getType() == Material.PISTON_MOVING_PIECE) {            //extended piston, you have to put a base instead (and it comes out unextended)
-			log_info("Piston_moving_piece", 2);
-			block_replace(block.getBlock(), (block.getRawData() >7)?Material.PISTON_STICKY_BASE.getId():Material.PISTON_BASE.getId(), (byte)(block.getRawData() + 8));
+			//log_info("Piston_moving_piece", 2);
+			//block_replace(block.getBlock(), (block.getRawData() >7)?Material.PISTON_STICKY_BASE.getId():Material.PISTON_BASE.getId(), (byte)(block.getRawData() + 8));
 
 		}
 		else {        //rest of it, just normal
@@ -1068,6 +1078,7 @@ public class CreeperHeal extends JavaPlugin {
 
 
 	private void loadConfig(){            //reads the config
+		log.info("Loading config");
 
 		interval = configInt("wait-before-heal", 60);        //tries to read the value directly from the config
 		log_level = configInt("log-level", 1);
@@ -1098,10 +1109,14 @@ public class CreeperHeal extends JavaPlugin {
 		drop_chance = configInt("drop-chance", 100);
 		
 		opEnforce = configBoolean("op-permissions", true);
+		
+		cracked = configBoolean("crack-bricks", false);
 
 		world_config.clear();
 		for(World w : getServer().getWorlds()) {
 			String name = w.getName();
+			log.info("Loading world : "+name);
+			
 			boolean creeper = configBoolean(name + ".Creepers", true);
 			boolean tnt = configBoolean(name + ".TNT", true);
 			boolean fire = configBoolean(name + ".Fire", true);
@@ -1111,6 +1126,10 @@ public class CreeperHeal extends JavaPlugin {
 			boolean magical = configBoolean(name + ".Magical", false );
 
 			boolean replace_tnt = configBoolean(name + ".replace-tnt", false);
+			
+			boolean replaceAbove = configBoolean(name + ".replace-above-only", false);
+			
+			int replaceLimit = configInt(name + ".replace-limit", 64);
 
 			String restrict_blocks;
 
@@ -1172,7 +1191,7 @@ public class CreeperHeal extends JavaPlugin {
 
 			}
 
-			world_config.put(name, new WorldConfig(name, creeper, tnt, ghast, fire, magical, replace_tnt, restrict_blocks, restrict_list));
+			world_config.put(name, new WorldConfig(name, creeper, tnt, ghast, fire, magical, replace_tnt, restrict_blocks, restrict_list, replaceAbove, replaceLimit));
 		}
 
 	}
@@ -1218,6 +1237,7 @@ public class CreeperHeal extends JavaPlugin {
 
 
 	public void config_write(){            //write the config to a file, with the values used, or the default ones
+		log_info("Writing config...", 2);
 		File yml = new File(getDataFolder()+"/config.yml");
 
 		new File(getDataFolder().toString()).mkdir();
@@ -1243,6 +1263,7 @@ public class CreeperHeal extends JavaPlugin {
 		config.setProperty("teleport-on-suffocate", teleport_on_suffocate);
 		config.setProperty("log-level", log_level);
 		config.setProperty("op-permissions", opEnforce);
+		config.setProperty("crack-bricks", cracked);
 
 
 		for(WorldConfig w : world_config.values()) {
@@ -1283,7 +1304,8 @@ public class CreeperHeal extends JavaPlugin {
 
 
 	public void storeTNT(ExplosionPrimeEvent event) {
-		tnt_location.put(event.getEntity(), new DateLoc(new Date(), event.getEntity().getLocation()));
+		log_info("tnt primed", 1);
+		tnt_location.put(event.getEntity(), new DateLoc(new Date(), event.getEntity().getLocation().getBlock().getLocation()));
 
 		getServer().getScheduler().scheduleSyncDelayedTask(this, new Runnable()
 
@@ -1318,6 +1340,10 @@ public class CreeperHeal extends JavaPlugin {
 
 	public boolean isTrap(Block block) {
 		return (getTrapOwner(block) != null);
+	}
+	
+	public boolean isTrap(Entity en){
+		return (getTrapOwner(tnt_location.get(en).getLocation().getBlock().getLocation()) != null);
 	}
 
 
@@ -1472,6 +1498,11 @@ public class CreeperHeal extends JavaPlugin {
 		}
 		
 		
+	}
+
+
+	public boolean isAbove(Entity entity, int replaceLimit) {
+		return tnt_location.get(entity).getLocation().getBlockY()>= replaceLimit;
 	}
 
 

@@ -19,6 +19,7 @@ drop-chance : (0 - 100) If setting above is true, chance that the block drops.
 teleport-on-suffocate : (true or false) If a player is caught in an explosion being healed and is to suffocate, teleport him above or to the side, to safety.
 log-level : (0 - 3) Amount of debugging messages shown. 1 is recommended.
 op-permissions : OP have all permissions.
+crack-bricks : (true or false) Whether bricks destroyed should be replaced as cracked ones.
 
 
 Per world :
@@ -37,7 +38,11 @@ Per world :
 - restrict-list : (list of block ID separated by commas) whitelist (or blacklist, depending on the setting above)
 		Example, to block dirt, all types of wood, normal logs and birch logs : 3, 35, 17:0, 17:2
 
-- replace-tnt : (true or false) Wether exploding TNT should be replaced or not.
+- replace-tnt : (true or false) Whether exploding TNT should be replaced or not.
+
+- replace-above-only : (true or false) Replace TNT damage only above the limit defined in replace-limit
+
+- replace-limit : (0-128) Level above which to replace TNT damage, if replace-above-only is set to true 
 
 
 ------------------------------------------------------
