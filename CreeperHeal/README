@@ -44,6 +44,8 @@ Per world :
 
 - replace-limit : (0-128) Level above which to replace TNT damage, if replace-above-only is set to true 
 
+- block-enderman : prevent Endermen from picking up blocks.
+
 
 ------------------------------------------------------
 TRAPS

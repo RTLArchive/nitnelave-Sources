@@ -25,6 +25,7 @@ public class CreeperListener extends EntityListener{
 
 	public void onEntityExplode(EntityExplodeEvent event) {//explosion
 		WorldConfig world = getWorld(event.getLocation().getWorld());
+		
 		if(!event.isCancelled()) {        //if there actually is an explosion
 			Entity entity = event.getEntity();
 			if(entity != null) {
@@ -64,7 +65,7 @@ public class CreeperListener extends EntityListener{
 	}
 
 	private WorldConfig getWorld(World w) {
-		return plugin.world_config.get(w.getName());
+		return plugin.loadWorldConfig(w);
 	}
 
 

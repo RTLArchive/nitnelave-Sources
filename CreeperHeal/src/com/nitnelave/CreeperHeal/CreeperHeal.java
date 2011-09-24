@@ -64,6 +64,7 @@ public class CreeperHeal extends JavaPlugin {
 	private CreeperListener listener = new CreeperListener(this);                        //listener for explosions
 	private FireListener fire_listener = new FireListener(this);                        //listener for fire
 	private TNTBreakListener block_listener = new TNTBreakListener(this);
+	private EnderListener ender_listener = new EnderListener(this);
 	private int log_level = 1;                                                            //level of message output of the config, with default value
 	HashMap<Location, ItemStack[]> chest_contents = new HashMap<Location, ItemStack[]>();         //stores the chests contents
 	HashMap<Location, String[]> sign_text = new HashMap<Location, String[]>();                    //stores the signs text
@@ -73,7 +74,7 @@ public class CreeperHeal extends JavaPlugin {
 	private ArrayList<Integer> blocks_last = new ArrayList<Integer>(Arrays.asList(6,18,26,27,28,31,32,37,38,39,40,50,55,59,63,64,65,66,68,69,70,71,72,75,76,77,81,83,93,94,96));  //blocks dependent on others. to put in last
 	private ArrayList<Integer> blocks_non_solid = new ArrayList<Integer>(Arrays.asList(0,6,8,9,26,27,28,30,31,37,38,39,40, 50,55,59,63,64,65,66,68,69,70,71,72,75,76,77,78,83,90,93,94,96));   //the player can breathe
 	//private ArrayList<Integer> attachable_blocks = new ArrayList<Integer>(Arrays.asList(50, 68, 69, 75, 76, 77));
-	private String[] world_config_nodes = {"Creepers", "TNT", "Ghast", "Magical", "Fire", "restrict-blocks", "restrict-list", "replace-tnt", "replace-above-only", "replace-limit"};
+	private String[] world_config_nodes = {"Creepers", "TNT", "Ghast", "Magical", "Fire", "restrict-blocks", "restrict-list", "replace-tnt", "replace-above-only", "replace-limit", "block-enderman"};
 	boolean drop_blocks_replaced = true;        //drop items when blocks are overwritten
 	public static PermissionHandler Permissions = null;    //permission stuff
 	int period = 20;        //frenquency to check for blocks to replace, in sec.
@@ -237,7 +238,7 @@ public class CreeperHeal extends JavaPlugin {
 		new File(getDataFolder()+"/config.yml").delete();        //delete, then rewrite the config with the new settings.
 
 		config_write();         //regenerates the config, allowing for some update.
-		
+
 		pm.registerEvent(Event.Type.BLOCK_BREAK, block_listener, Event.Priority.Normal, this);
 
 		pm.registerEvent(Event.Type.ENTITY_EXPLODE, listener, Event.Priority.High, this);
@@ -253,6 +254,8 @@ public class CreeperHeal extends JavaPlugin {
 			log.warning("[CreeperHeal] Impossible to schedule the re-filling task. Auto-refill will not work");
 
 		pm.registerEvent(Event.Type.BLOCK_BURN, fire_listener, Event.Priority.Monitor, this);
+
+		pm.registerEvent(Event.Type.ENDERMAN_PICKUP, ender_listener, Event.Priority.High, this);
 
 		if( getServer().getScheduler().scheduleSyncRepeatingTask(this, new Runnable() {
 			public void run() {
@@ -276,7 +279,7 @@ public class CreeperHeal extends JavaPlugin {
 		saveTraps();
 	}
 
-	
+
 
 
 	public boolean onCommand(CommandSender sender, Command command, String commandLabel, String[] args) {
@@ -284,14 +287,15 @@ public class CreeperHeal extends JavaPlugin {
 
 
 		if(args.length != 0) {        //if it's just /ch, display help
-			WorldConfig current_world =     world_config.get(args[args.length - 1]);   
+			WorldConfig current_world =     loadWorldConfig(args[args.length - 1]);   
 
 			if(current_world == null) {
 
-				if(sender instanceof Player)
-					current_world = world_config.get( ((Player)sender).getWorld().getName());
+				if(sender instanceof Player){
+					current_world = loadWorldConfig( ((Player)sender).getWorld());
+				}
 				else {
-					current_world = world_config.get(getServer().getWorlds().get(0).getName());
+					current_world = loadWorldConfig(getServer().getWorlds().get(0));
 					sender.sendMessage("No world specified, defaulting to " + current_world.getName());
 				}
 			}
@@ -350,6 +354,8 @@ public class CreeperHeal extends JavaPlugin {
 		return true;
 	}
 
+
+
 	private void sendHelp(CommandSender sender) {
 		sender.sendMessage("CreeperHeal -- Repair explosions damage and make traps");
 		sender.sendMessage("--------------------------------------------");
@@ -358,17 +364,17 @@ public class CreeperHeal extends JavaPlugin {
 		boolean admin = true;
 		boolean heal = true;
 		boolean trap = true;
-		
+
 		if(sender instanceof Player){
 			Player player = (Player) sender;
 			admin = checkPermissions("admin", player);
 			heal = checkPermissions("heal", player);
 			trap = checkPermissions("trap.create", player) || checkPermissions("trap.*", player);
 		}
-		
+
 		if(!(admin || heal || trap))
 			sender.sendMessage(purple + "You do not have access to any of the CreeperHeal commands");
-		
+
 		if(admin){
 			sender.sendMessage(green + "/ch reload :" + purple + " reloads the config from the file.");
 			sender.sendMessage(green + "/ch creeper (on|off) (world) :" + purple + " toggles creeper explosion replacement");
@@ -379,17 +385,17 @@ public class CreeperHeal extends JavaPlugin {
 			sender.sendMessage(green + "/ch interval [seconds] :" + purple + " Sets the interval before an explosion is replaced to x seconds");
 			sender.sendMessage(green + "/ch burnInterval [seconds] :" + purple + " Sets the interval before a block burnt is replaced to x seconds");
 		}
-		
+
 		if(heal || admin){
 			sender.sendMessage(green + "/ch heal (seconds) (world) :" + purple + " Heals all explosions in the last x seconds, or all if x is not specified.");
 			sender.sendMessage(green + "/ch healBurnt (seconds) (world) :" + purple + " Heal all burnt blocks since x seconds, or all if x is not specified.");
 		}
-		
+
 		if(trap){
 			sender.sendMessage(green + "/ch trap (create|delete) :" + purple + " creates/removes a trap from the tnt block in front of you.");
 		}
-				
-		
+
+
 	}
 
 
@@ -513,13 +519,13 @@ public class CreeperHeal extends JavaPlugin {
 		if(event.getEntity() instanceof TNTPrimed) {            //to replace the tnt that just exploded
 			Entity entity = event.getEntity();
 			Block block = tnt_location.get(entity).getLocation().getBlock();
-			
+
 			log_info("explosion at " + block.getX() + ";" + block.getY() + ";" + block.getZ(), 1);
 			if(world.replace_tnt || isTrap(block)) {
 				log_info("trap exploded", 1);
-				
+
 				trapToAdd.put(now, block);
-				
+
 				getServer().getScheduler().scheduleSyncDelayedTask(this, new Runnable()
 
 				{
@@ -530,7 +536,7 @@ public class CreeperHeal extends JavaPlugin {
 
 					}});
 
-				
+
 			}
 		}
 
@@ -586,7 +592,7 @@ public class CreeperHeal extends JavaPlugin {
 				case PISTON_EXTENSION :
 					break;
 				case TNT :
-					if(isTrap(block) || world_config.get(block.getWorld().getName()).replace_tnt){
+					if(isTrap(block) || loadWorldConfig(block.getWorld()).replace_tnt){
 						list_state.add(block.getState());
 						list_loc.add(block.getLocation());
 					}
@@ -679,11 +685,11 @@ public class CreeperHeal extends JavaPlugin {
 
 
 			tmp_state.update(true);        //set it back to what it was
-			
+
 			iter.remove();
 		}
-		
-		
+
+
 	}
 
 
@@ -1107,91 +1113,17 @@ public class CreeperHeal extends JavaPlugin {
 		drop_not_replaced = configBoolean("drop-not-replaced-block", true);
 
 		drop_chance = configInt("drop-chance", 100);
-		
+
 		opEnforce = configBoolean("op-permissions", true);
-		
+
 		cracked = configBoolean("crack-bricks", false);
 
 		world_config.clear();
 		for(World w : getServer().getWorlds()) {
 			String name = w.getName();
-			log.info("Loading world : "+name);
-			
-			boolean creeper = configBoolean(name + ".Creepers", true);
-			boolean tnt = configBoolean(name + ".TNT", true);
-			boolean fire = configBoolean(name + ".Fire", true);
+			log_info("Loading world : "+name, 1);
 
-			boolean ghast = configBoolean(name + ".Ghast", true);
-
-			boolean magical = configBoolean(name + ".Magical", false );
-
-			boolean replace_tnt = configBoolean(name + ".replace-tnt", false);
-			
-			boolean replaceAbove = configBoolean(name + ".replace-above-only", false);
-			
-			int replaceLimit = configInt(name + ".replace-limit", 64);
-
-			String restrict_blocks;
-
-			try{
-
-				restrict_blocks = getConfiguration().getString(name + ".restrict-blocks", "false").trim();
-
-			}
-
-			catch (Exception e) {
-
-				log.warning("[CreeperHeal] Wrong value for " + name + ".restrict-blocks field. Defaulting to false.");
-
-				log_info(e.getLocalizedMessage(), 1);
-
-				restrict_blocks = "false";
-
-			}        //if not a valid value
-
-			if(!restrict_blocks.equalsIgnoreCase("false") && !restrict_blocks.equalsIgnoreCase("whitelist") && !restrict_blocks.equalsIgnoreCase("blacklist")) {
-
-				log.warning("[CreeperHeal] Wrong value for " + name + ".restrict-blocks field. Defaulting to false.");
-
-				restrict_blocks = "false";
-
-			}
-
-			ArrayList<BlockId> restrict_list  = new ArrayList<BlockId>();
-
-			try{
-
-				String tmp_str1 = getConfiguration().getString(name + ".restrict-list", "").trim();
-				
-				String[] split = tmp_str1.split(",");
-
-				if(split!=null){        //split the list into single strings of integer
-
-					for(String elem : split) {
-
-						restrict_list.add(new BlockId(elem));
-
-					}
-
-				}
-
-				else
-
-					log_info("[CreeperHeal] Empty restrict-list for world " + name, 1);
-
-			}
-
-			catch (Exception e) {
-
-				log.warning("[CreeperHeal] Wrong values for restrict-list field for world " + name);
-
-				restrict_list.clear();
-
-				restrict_list.add(new BlockId(0));
-
-			}
-
-			world_config.put(name, new WorldConfig(name, creeper, tnt, ghast, fire, magical, replace_tnt, restrict_blocks, restrict_list, replaceAbove, replaceLimit));
+			loadWorldConfig(name);
 		}
 
 	}
@@ -1341,7 +1273,7 @@ public class CreeperHeal extends JavaPlugin {
 	public boolean isTrap(Block block) {
 		return (getTrapOwner(block) != null);
 	}
-	
+
 	public boolean isTrap(Entity en){
 		return (getTrapOwner(tnt_location.get(en).getLocation().getBlock().getLocation()) != null);
 	}
@@ -1474,7 +1406,7 @@ public class CreeperHeal extends JavaPlugin {
 		}
 
 	}
-	
+
 	public void deleteTrap(Location loc){
 		trap_location.remove(locToString(loc));
 	}
@@ -1482,9 +1414,9 @@ public class CreeperHeal extends JavaPlugin {
 	private void saveTraps() {
 		File trapFile = new File(getDataFolder() + "/trap.yml");
 		BufferedWriter out;
-		
+
 		trapFile.delete();
-		
+
 		try {
 			trapFile.createNewFile();
 			out = new BufferedWriter(new FileWriter(trapFile));
@@ -1496,8 +1428,8 @@ public class CreeperHeal extends JavaPlugin {
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
-		
-		
+
+
 	}
 
 
@@ -1506,4 +1438,95 @@ public class CreeperHeal extends JavaPlugin {
 	}
 
 
+	public WorldConfig loadWorldConfig(World world) {
+
+		return loadWorldConfig(world.getName());
+	}
+
+
+	private WorldConfig loadWorldConfig(String name) {
+		WorldConfig returnValue = world_config.get(name);
+		
+		if(returnValue == null){
+			boolean creeper = configBoolean(name + ".Creepers", true);
+			boolean tnt = configBoolean(name + ".TNT", true);
+			boolean fire = configBoolean(name + ".Fire", true);
+
+			boolean ghast = configBoolean(name + ".Ghast", true);
+
+			boolean magical = configBoolean(name + ".Magical", false );
+
+			boolean replace_tnt = configBoolean(name + ".replace-tnt", false);
+
+			boolean replaceAbove = configBoolean(name + ".replace-above-only", false);
+
+			int replaceLimit = configInt(name + ".replace-limit", 64);
+			
+			boolean enderman = configBoolean(name + ".block-enderman", false);
+
+			String restrict_blocks;
+
+			try{
+
+				restrict_blocks = getConfiguration().getString(name + ".restrict-blocks", "false").trim();
+
+			}
+
+			catch (Exception e) {
+
+				log.warning("[CreeperHeal] Wrong value for " + name + ".restrict-blocks field. Defaulting to false.");
+
+				log_info(e.getLocalizedMessage(), 1);
+
+				restrict_blocks = "false";
+
+			}        //if not a valid value
+
+			if(!restrict_blocks.equalsIgnoreCase("false") && !restrict_blocks.equalsIgnoreCase("whitelist") && !restrict_blocks.equalsIgnoreCase("blacklist")) {
+
+				log.warning("[CreeperHeal] Wrong value for " + name + ".restrict-blocks field. Defaulting to false.");
+
+				restrict_blocks = "false";
+
+			}
+
+			ArrayList<BlockId> restrict_list  = new ArrayList<BlockId>();
+
+			try{
+
+				String tmp_str1 = getConfiguration().getString(name + ".restrict-list", "").trim();
+
+				String[] split = tmp_str1.split(",");
+
+				if(split!=null){        //split the list into single strings of integer
+
+					for(String elem : split) {
+
+						restrict_list.add(new BlockId(elem));
+
+					}
+
+				}
+
+				else
+
+					log_info("[CreeperHeal] Empty restrict-list for world " + name, 1);
+
+			}
+
+			catch (Exception e) {
+
+				log.warning("[CreeperHeal] Wrong values for restrict-list field for world " + name);
+
+				restrict_list.clear();
+
+				restrict_list.add(new BlockId(0));
+
+			}
+
+			return world_config.put(name, new WorldConfig(name, creeper, tnt, ghast, fire, magical, replace_tnt, restrict_blocks, restrict_list, replaceAbove, replaceLimit, enderman));
+		}
+
+		return returnValue;
+	}
 }

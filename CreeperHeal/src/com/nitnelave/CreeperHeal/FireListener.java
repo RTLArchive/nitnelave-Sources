@@ -18,7 +18,7 @@ public class FireListener extends BlockListener{
 	}
 
 	public void onBlockBurn(BlockBurnEvent event) {        //no need to check for the setting, the listener only gets declared if it is set to true
-		WorldConfig world = plugin.world_config.get( event.getBlock().getLocation().getWorld().getName());
+		WorldConfig world = plugin.loadWorldConfig( event.getBlock().getLocation().getWorld());
 
 		if(world.fire)
 			plugin.record_burn(event.getBlock());
