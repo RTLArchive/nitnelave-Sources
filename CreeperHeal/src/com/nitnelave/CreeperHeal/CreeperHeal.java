@@ -1523,8 +1523,10 @@ public class CreeperHeal extends JavaPlugin {
 				restrict_list.add(new BlockId(0));
 
 			}
+			
+			returnValue = new WorldConfig(name, creeper, tnt, ghast, fire, magical, replace_tnt, restrict_blocks, restrict_list, replaceAbove, replaceLimit, enderman);
 
-			return world_config.put(name, new WorldConfig(name, creeper, tnt, ghast, fire, magical, replace_tnt, restrict_blocks, restrict_list, replaceAbove, replaceLimit, enderman));
+			return world_config.put(name, returnValue);
 		}
 
 		return returnValue;
