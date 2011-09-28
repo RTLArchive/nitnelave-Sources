@@ -1525,8 +1525,9 @@ public class CreeperHeal extends JavaPlugin {
 			}
 			
 			returnValue = new WorldConfig(name, creeper, tnt, ghast, fire, magical, replace_tnt, restrict_blocks, restrict_list, replaceAbove, replaceLimit, enderman);
-
-			return world_config.put(name, returnValue);
+			
+			world_config.put(name, returnValue);
+			return returnValue;
 		}
 
 		return returnValue;
