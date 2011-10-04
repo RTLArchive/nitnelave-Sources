@@ -235,7 +235,6 @@ public class CreeperHeal extends JavaPlugin {
 		block_interval = configInt("block-per-block-interval", 20);
 
 		loadConfig();        //read the rest of the config.
-		new File(getDataFolder()+"/config.yml").delete();        //delete, then rewrite the config with the new settings.
 
 		config_write();         //regenerates the config, allowing for some update.
 
@@ -275,6 +274,7 @@ public class CreeperHeal extends JavaPlugin {
 			force_replace(0, w);        //replace blocks still in memory, so they are not lost
 			force_replace_burnt(0, w);    //same for burnt_blocks
 		}
+		config_write();
 		log.info("[CreeperHeal] Disabled");
 		saveTraps();
 	}
@@ -287,7 +287,8 @@ public class CreeperHeal extends JavaPlugin {
 
 
 		if(args.length != 0) {        //if it's just /ch, display help
-			WorldConfig current_world =     loadWorldConfig(args[args.length - 1]);   
+			
+			WorldConfig current_world = world_config.get(args[args.length - 1]);   
 
 			if(current_world == null) {
 
@@ -342,8 +343,6 @@ public class CreeperHeal extends JavaPlugin {
 				return true;
 			}
 
-			new File(getDataFolder()+"/config.yml").delete();        //delete, then rewrite the config with the new settings.
-
 			config_write();
 		}
 		else {
@@ -353,7 +352,6 @@ public class CreeperHeal extends JavaPlugin {
 
 		return true;
 	}
-
 
 
 	private void sendHelp(CommandSender sender) {
@@ -520,9 +518,9 @@ public class CreeperHeal extends JavaPlugin {
 			Entity entity = event.getEntity();
 			Block block = tnt_location.get(entity).getLocation().getBlock();
 
-			log_info("explosion at " + block.getX() + ";" + block.getY() + ";" + block.getZ(), 1);
+			log_info("explosion at " + block.getX() + ";" + block.getY() + ";" + block.getZ(), 2);
 			if(world.replace_tnt || isTrap(block)) {
-				log_info("trap exploded", 1);
+				log_info("trap exploded", 2);
 
 				trapToAdd.put(now, block);
 
@@ -727,7 +725,7 @@ public class CreeperHeal extends JavaPlugin {
 			if(!blocks_last.contains(block.getTypeId())){
 				replace_blocks(block);        //replace it
 				check_player_one_block(block.getBlock().getLocation());
-				log_info(block.getType().toString(), 3);
+				log_info(block.getType().toString(), 4);
 				iter.remove();        //remove it
 				return;
 
@@ -735,7 +733,7 @@ public class CreeperHeal extends JavaPlugin {
 		}
 		replace_blocks(list.get(0));        //only dependent blocks left, replace the first
 		check_player_one_block(list.get(0).getBlock().getLocation());
-		log_info(list.get(0).getType().toString(), 3);
+		log_info(list.get(0).getType().toString(), 4);
 		list.remove(0);
 
 	}
@@ -1085,6 +1083,8 @@ public class CreeperHeal extends JavaPlugin {
 
 	private void loadConfig(){            //reads the config
 		log.info("Loading config");
+		
+		getConfiguration().load();
 
 		interval = configInt("wait-before-heal", 60);        //tries to read the value directly from the config
 		log_level = configInt("log-level", 1);
@@ -1121,10 +1121,9 @@ public class CreeperHeal extends JavaPlugin {
 		world_config.clear();
 		for(World w : getServer().getWorlds()) {
 			String name = w.getName();
-			log_info("Loading world : "+name, 1);
-
 			loadWorldConfig(name);
 		}
+		
 
 	}
 
@@ -1172,12 +1171,14 @@ public class CreeperHeal extends JavaPlugin {
 		log_info("Writing config...", 2);
 		File yml = new File(getDataFolder()+"/config.yml");
 
-		new File(getDataFolder().toString()).mkdir();
-		try {
-			yml.createNewFile();
-		}
-		catch (IOException ex) {
-			log.warning("[CreeperHeal] Cannot create file "+yml.getPath());
+		if(!yml.exists()){
+			new File(getDataFolder().toString()).mkdir();
+			try {
+				yml.createNewFile();
+			}
+			catch (IOException ex) {
+				log.warning("[CreeperHeal] Cannot create file "+yml.getPath());
+			}
 		}
 
 		Configuration config = new Configuration(yml);
@@ -1236,7 +1237,7 @@ public class CreeperHeal extends JavaPlugin {
 
 
 	public void storeTNT(ExplosionPrimeEvent event) {
-		log_info("tnt primed", 1);
+		log_info("tnt primed", 2);
 		tnt_location.put(event.getEntity(), new DateLoc(new Date(), event.getEntity().getLocation().getBlock().getLocation()));
 
 		getServer().getScheduler().scheduleSyncDelayedTask(this, new Runnable()
@@ -1445,9 +1446,11 @@ public class CreeperHeal extends JavaPlugin {
 
 
 	private WorldConfig loadWorldConfig(String name) {
+		
 		WorldConfig returnValue = world_config.get(name);
 		
 		if(returnValue == null){
+			log_info("Loading world: "+name, 1);
 			boolean creeper = configBoolean(name + ".Creepers", true);
 			boolean tnt = configBoolean(name + ".TNT", true);
 			boolean fire = configBoolean(name + ".Fire", true);
