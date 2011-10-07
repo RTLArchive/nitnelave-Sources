@@ -274,9 +274,8 @@ public class CreeperHeal extends JavaPlugin {
 			force_replace(0, w);        //replace blocks still in memory, so they are not lost
 			force_replace_burnt(0, w);    //same for burnt_blocks
 		}
-		config_write();
-		log.info("[CreeperHeal] Disabled");
 		saveTraps();
+		log.info("[CreeperHeal] Disabled");
 	}
 
 
@@ -1089,7 +1088,7 @@ public class CreeperHeal extends JavaPlugin {
 		interval = configInt("wait-before-heal", 60);        //tries to read the value directly from the config
 		log_level = configInt("log-level", 1);
 
-		drop_blocks_replaced = configBoolean("drop-replaced-blocks", true);
+		drop_blocks_replaced = configBoolean("drop-replaced-block", true);
 
 
 		String tmp_str;
